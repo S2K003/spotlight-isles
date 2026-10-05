@@ -6,20 +6,22 @@ import type { TimeOfDay } from "@/game/render/Sky";
 import type { HostController, HostView } from "@/lib/net/host";
 
 type Kind = string;
+export const ORDINAL = ["1st", "2nd", "3rd", "4th", "5th", "6th"];
 
-/** Dawn (lobby + intro) → day (rounds 1–6) → sunset (rounds 7–12) → night (Final Showdown onward). */
+/** Dawn (lobby + intro) → day (rounds 1–3) → sunset (rounds 4–6) → night (results onward). */
 export function timeOfDay(kind: Kind, round: number): TimeOfDay {
   if (kind === "lobby" || kind === "intro") return "dawn";
-  if (kind.startsWith("final") || kind === "results" || kind === "debrief" || kind === "over") return "night";
-  return round >= 7 ? "sunset" : "day";
+  if (kind === "results" || kind === "debrief" || kind === "over") return "night";
+  return round >= 4 ? "sunset" : "day";
 }
 
 function insetsFor(kind: Kind) {
-  if (kind === "lobby") return { left: 0, right: 0, top: 0, bottom: 0 };
+  if (kind === "lobby" || kind === "results" || kind === "debrief" || kind === "over") return { left: 0, right: 0, top: 0, bottom: 0 };
   if (kind === "intro") return { left: 0, right: 0, top: 60, bottom: 0 };
-  if (kind === "results" || kind === "debrief" || kind === "over") return { left: 0, right: 0, top: 0, bottom: 0 };
-  const bottom = kind === "vote" || kind === "resolve" || kind === "finalFlood" || kind === "finalBanner" ? 110 : kind.startsWith("spot") ? 390 : 350;
-  return { left: 20, right: 430, top: 120, bottom };
+  const moving = kind === "vote" || kind === "resolve";
+  const bottom = moving ? 190 : kind === "reveal" ? 500 : kind.startsWith("spot") ? 400 : 390;
+  // During the vote and the moves the legend sits on the left, so the map shifts right to clear it.
+  return { left: moving ? 330 : 20, right: 440, top: 130, bottom };
 }
 
 interface Props {
@@ -79,30 +81,27 @@ export function MapCanvas({ ctl, view, onEvent, lowFx }: Props) {
     r.setTimeOfDay(tod, first.current);
     first.current = false;
     r.setInsets(insetsFor(kind));
-    r.setMode(kind === "lobby" || kind === "results" || kind === "debrief" || kind === "over" ? "lobby" : kind === "intro" ? "intro" : kind.startsWith("final") ? "final" : "play");
+    r.setMode(kind === "lobby" || kind === "results" || kind === "debrief" || kind === "over" ? "lobby" : kind === "intro" ? "intro" : "play");
+    r.setHomes(pd.teams);
 
     const rem = ctl.remaining();
     const fresh = rem.phaseDurationMs > 0 && rem.phaseMs > rem.phaseDurationMs * 0.6;
-    if (!r.hasMap || !fresh) {
-      r.syncTiles(state.tiles, true);
-      r.syncTeams(pd.teams, true);
-    } else if (kind === "resolve" && pd.moves) {
+    if (kind === "resolve" && pd.moves && r.hasMap && fresh) {
       r.playResolution(pd.moves, state.tiles, pd.teams, rem.phaseMs);
-    } else if (kind === "finalFlood" && pd.final?.claims) {
-      r.playFlood(pd.final.claims, pd.final.stageWinner ?? null, state.tiles, pd.teams, rem.phaseMs);
     } else {
-      r.syncTiles(state.tiles);
-      r.syncTeams(pd.teams);
+      r.syncTiles(state.tiles, !r.hasMap || !fresh);
+      r.syncTeams(pd.teams, !r.hasMap || !fresh);
     }
 
-    const showMp = kind === "reveal" || kind === "spotReveal" || kind === "vote";
-    r.setBadges(showMp ? pd.teams.map((t) => t.mp) : null, showMp ? pd.teamResults?.map((t) => t.stageFright) : undefined);
+    // Once the round's result is known, each ship shows its place in the move order and its steps.
+    const show = kind === "reveal" || kind === "spotReveal" || kind === "vote";
+    r.setBadges(show ? pd.teams.map((t) => (t.docked !== null || t.order === null || t.steps === null ? null : `${ORDINAL[t.order]} · ${t.steps}`)) : null);
     if (kind !== "vote") r.setVoteProgress(null);
-    if (kind === "results" && pd.results?.ranking[0]) r.celebrate(pd.results.ranking[0].teamId, Math.min(40, rem.phaseMs / 1000));
+    if (kind === "results" && pd.results?.ranking[0]) r.celebrate(pd.results.ranking[0].teamId, Math.min(30, rem.phaseMs / 1000));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, view.phaseVersion, view.state.roomCode]);
 
-  // "Votes in" rings (rivals' choices stay hidden until resolution).
+  // "Votes in" rings.
   useEffect(() => {
     const r = rendererRef.current;
     if (!ready || !r || kind !== "vote") return;

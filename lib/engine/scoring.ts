@@ -1,169 +1,99 @@
-import {
-  MANUAL_BAND_ACCURACY,
-  MANUAL_DEFAULT_BAND,
-  MP_BANDS,
-  MP_MAX,
-  MP_MIN,
-  QUICK_DRAW_BONUS,
-  QUICK_DRAW_MIN_ACCURACY,
-  SCORE,
-} from "@/config/balance";
-import { CRITERIA } from "@/config/rubric";
-import type { CriterionKey, Mod, Team, TeamId, TeamRoundResult, Tile } from "./types";
+import { AUDIENCE_STEPS, MANUAL_BAND_ACCURACY, MANUAL_DEFAULT_BAND, MAX_STEPS, MIN_STEPS, PITCH_BANDS, POINTS, STEP_BANDS, TAILWIND_STEPS } from "@/config/balance";
+import type { Team, TeamId, TeamRoundResult } from "./types";
 
-export function median(values: number[]): number | null {
-  if (!values.length) return null;
-  const s = values.slice().sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+/** Team accuracy (0..1) on a question → steps. Even a wrong answer moves 1: nobody is left behind. */
+export function stepsFromAccuracy(accuracy: number): number {
+  for (const band of STEP_BANDS) if (accuracy >= band.min) return band.steps;
+  return MIN_STEPS;
 }
 
-/** Accuracy (0..1) → base movement points. 0% (or nobody answered) is Stage Fright: 0 MP. */
-export function baseMp(accuracy: number): number {
-  for (const band of MP_BANDS) if (accuracy >= band.min) return band.mp;
-  return 0;
+/** Points for a question: 10 per step earned, but nothing for getting it completely wrong. */
+export function pointsFromAccuracy(accuracy: number): number {
+  return accuracy > 0 ? stepsFromAccuracy(accuracy) * POINTS.perStep : 0;
 }
 
-export function clampMp(mp: number): number {
-  return Math.max(MP_MIN, Math.min(MP_MAX, mp));
+/** Pitch star average (1–5) → steps for the speaking team. Speaking always earns at least 1. */
+export function stepsFromPitch(overall: number): number {
+  for (const band of PITCH_BANDS) if (overall >= band.min) return band.steps;
+  return MIN_STEPS;
 }
 
-export function applyMods(base: number, mods: Mod[]): number {
-  return clampMp(base + mods.reduce((s, m) => s + m.delta, 0));
-}
-
-/** Used to break clashes: accuracy × 1000 − median speed in ms ÷ 100. */
-export function roundScore(accuracy: number, medianMs: number | null): number {
-  return accuracy * 1000 - (medianMs ?? 0) / 100;
+export function audienceSteps(rated: boolean, fair: boolean): number {
+  return fair ? AUDIENCE_STEPS.fair : rated ? AUDIENCE_STEPS.rated : AUDIENCE_STEPS.none;
 }
 
 export interface TeamAnswers {
   teamId: TeamId;
   /** Members connected during the phase (anyone who answered counts as connected). */
   members: number;
-  /** Host-measured answer times of the members who answered correctly. */
-  correctTimes: number[];
+  correct: number;
 }
 
 /**
- * Section 5.1. Accuracy is correct ÷ connected members, so a team of 1 is exactly as strong
- * as a team of 8. Quick Draw goes to the fastest team (lowest median) with ≥50% accuracy.
+ * Question round. Accuracy is correct ÷ connected members, so a team of 1 is exactly as strong
+ * as a team of 8. There is no speed bonus: teams are meant to talk it through.
  */
-export function scoreChallenge(inputs: TeamAnswers[], mods: Mod[][]): TeamRoundResult[] {
-  const rows = inputs.map((inp) => {
-    const correct = inp.correctTimes.length;
-    const accuracy = inp.members > 0 ? Math.min(1, correct / inp.members) : 0;
-    return { inp, correct, accuracy, medianMs: median(inp.correctTimes) };
-  });
-
-  let quick: TeamId | null = null;
-  let best = Infinity;
-  for (const r of rows) {
-    if (r.accuracy >= QUICK_DRAW_MIN_ACCURACY && r.medianMs !== null && r.medianMs < best) {
-      best = r.medianMs;
-      quick = r.inp.teamId;
-    }
-  }
-
-  return rows.map((r) => {
-    const quickDraw = quick === r.inp.teamId;
-    const base = baseMp(r.accuracy) + (quickDraw ? QUICK_DRAW_BONUS : 0);
-    const teamMods = mods[r.inp.teamId] ?? [];
+export function scoreQuestion(inputs: TeamAnswers[]): TeamRoundResult[] {
+  return inputs.map((inp) => {
+    const accuracy = inp.members > 0 ? Math.min(1, inp.correct / inp.members) : 0;
     return {
-      teamId: r.inp.teamId,
-      members: r.inp.members,
-      correct: r.correct,
-      accuracy: r.accuracy,
-      medianMs: r.medianMs,
-      baseMp: base,
-      quickDraw,
-      mods: teamMods,
-      mp: applyMods(base, teamMods),
-      roundScore: roundScore(r.accuracy, r.medianMs),
-      stageFright: r.accuracy === 0,
-    };
-  });
-}
-
-/** Manual Mode: the facilitator clicks an accuracy band per team and (optionally) the Quick Draw team. */
-export function scoreManual(bands: (number | null)[], quickDraw: TeamId | null, mods: Mod[][]): TeamRoundResult[] {
-  return bands.map((b, i) => {
-    const band = b ?? MANUAL_DEFAULT_BAND;
-    const accuracy = MANUAL_BAND_ACCURACY[band];
-    const isQuick = quickDraw === i && accuracy >= QUICK_DRAW_MIN_ACCURACY;
-    const base = baseMp(accuracy) + (isQuick ? QUICK_DRAW_BONUS : 0);
-    const teamMods = mods[i] ?? [];
-    return {
-      teamId: i as TeamId,
-      members: 0,
-      correct: 0,
+      teamId: inp.teamId,
+      members: inp.members,
+      correct: inp.correct,
       accuracy,
-      medianMs: null,
-      baseMp: base,
-      quickDraw: isQuick,
-      mods: teamMods,
-      mp: applyMods(base, teamMods),
-      roundScore: accuracy * 1000 + (isQuick ? 50 : 0),
-      stageFright: accuracy === 0,
+      steps: stepsFromAccuracy(accuracy),
+      points: pointsFromAccuracy(accuracy),
+      tailwind: false,
     };
   });
 }
 
-export interface TeamScore {
-  teamId: TeamId;
-  score: number;
-  tiles: number;
-  mastery: CriterionKey[];
-  stage: boolean;
+/** Manual Mode: the facilitator clicks an accuracy band per team after a show of hands. */
+export function scoreManual(bands: (number | null)[]): TeamRoundResult[] {
+  return bands.map((b, i) => {
+    const accuracy = MANUAL_BAND_ACCURACY[b ?? MANUAL_DEFAULT_BAND];
+    return { teamId: i as TeamId, members: 0, correct: 0, accuracy, steps: stepsFromAccuracy(accuracy), points: pointsFromAccuracy(accuracy), tailwind: false };
+  });
 }
 
 /**
- * Section 9. Score = owned tiles × 10 + 50 per region mastered + 100 for the Keynote Stage.
- * A region is mastered by the team with strictly the most tiles in it, with at least 5.
- * The Stage tile itself is worth its 100 bonus and is not also counted as a ×10 tile.
+ * After a round's points are known: docked ships don't move, and the team (or tied teams) in last
+ * place among those still flying gets a tailwind of +1 step, unless everyone is level.
+ * `scores` are the totals AFTER this round's points.
  */
-export function teamScores(tiles: Tile[], teams: Pick<Team, "id">[], stageOwner: TeamId | null): TeamScore[] {
-  const owned = teams.map(() => 0);
-  const perRegion: Record<string, number[]> = {};
-  for (const c of CRITERIA) perRegion[c] = teams.map(() => 0);
-
-  for (const t of tiles) {
-    if (t.owner === undefined || t.type === "stage") continue;
-    owned[t.owner]++;
-    if (t.region !== "plaza") perRegion[t.region][t.owner]++;
-  }
-
-  const mastery: CriterionKey[][] = teams.map(() => []);
-  for (const c of CRITERIA) {
-    const counts = perRegion[c];
-    const max = Math.max(...counts);
-    if (max < SCORE.masteryMinTiles) continue;
-    const leaders = counts.map((n, i) => (n === max ? i : -1)).filter((i) => i >= 0);
-    if (leaders.length === 1) mastery[leaders[0]].push(c);
-  }
-
-  return teams.map((team, i) => {
-    const stage = stageOwner === team.id;
-    return {
-      teamId: team.id,
-      tiles: owned[i],
-      mastery: mastery[i],
-      stage,
-      score: owned[i] * SCORE.tile + mastery[i].length * SCORE.mastery + (stage ? SCORE.stage : 0),
-    };
+export function applyTailwind(results: TeamRoundResult[], teams: Pick<Team, "id" | "docked">[], scores: number[]): TeamRoundResult[] {
+  const flying = teams.filter((t) => t.docked === null).map((t) => t.id);
+  const low = Math.min(...flying.map((id) => scores[id]));
+  const high = Math.max(...teams.map((t) => scores[t.id]));
+  return results.map((r) => {
+    if (teams[r.teamId].docked !== null) return { ...r, steps: 0, tailwind: false };
+    const tailwind = flying.length > 0 && scores[r.teamId] === low && low < high;
+    return { ...r, tailwind, steps: Math.min(MAX_STEPS, r.steps + (tailwind ? TAILWIND_STEPS : 0)) };
   });
 }
 
-/** Rank rows by score (ties share a rank; order within a tie is by tiles, then team id). */
-export function rankTeams(scores: TeamScore[]): (TeamScore & { rank: number })[] {
-  const sorted = scores.slice().sort((a, b) => b.score - a.score || b.tiles - a.tiles || a.teamId - b.teamId);
+/**
+ * Move order: the team with the most points moves first. Ties are broken by a seeded draw.
+ * Docked ships are listed last (they don't move).
+ */
+export function moveOrder(teams: Pick<Team, "id" | "score" | "docked">[], rng: () => number): TeamId[] {
+  const draw = teams.map(() => rng());
+  return teams
+    .slice()
+    .sort((a, b) => Number(a.docked !== null) - Number(b.docked !== null) || b.score - a.score || draw[a.id] - draw[b.id])
+    .map((t) => t.id);
+}
+
+/** Final ranking by score (ties share a rank; earlier arrival at the Stage, then team id, orders a tie). */
+export function rankTeams<T extends Pick<Team, "id" | "score" | "docked">>(teams: T[]): (T & { rank: number })[] {
+  const sorted = teams.slice().sort((a, b) => b.score - a.score || (a.docked ?? 99) - (b.docked ?? 99) || a.id - b.id);
   let rank = 0;
   let prev = NaN;
-  return sorted.map((s, i) => {
-    if (s.score !== prev) {
+  return sorted.map((t, i) => {
+    if (t.score !== prev) {
       rank = i + 1;
-      prev = s.score;
+      prev = t.score;
     }
-    return { ...s, rank };
+    return { ...t, rank };
   });
 }

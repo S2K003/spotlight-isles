@@ -20,7 +20,7 @@ import {
 } from "@/lib/engine/game";
 import { makeRoomCode } from "@/lib/engine/rng";
 import { TIMELINE } from "@/lib/engine/timeline";
-import type { CardId, GameState, Phase, PublicData, TeamId } from "@/lib/engine/types";
+import type { GameState, Phase, PublicData, TeamId } from "@/lib/engine/types";
 import {
   cleanName,
   isTeamId,
@@ -36,7 +36,7 @@ import { createTransport, type Transport, type TransportStatus } from "./transpo
 const SNAPSHOT_KEY = "spotlight-isles:host";
 const LOOP_MS = 50;
 const SNAPSHOT_EVERY_MS = 2000;
-const MAP_PHASES = new Set(["intro", "challenge", "spotReady", "vote", "resolve", "finalBanner", "finalFlood", "results"]);
+const MAP_PHASES = new Set(["intro", "challenge", "spotReady", "vote", "resolve", "results"]);
 
 export interface HostView {
   state: GameState;
@@ -284,27 +284,14 @@ export class HostController {
 
   setManualBand(teamId: TeamId, band: number): void {
     this.state.manual.bands[teamId] = band;
-    if (band < 2 && this.state.manual.quickDraw === teamId) this.state.manual.quickDraw = null;
-    this.changed();
-  }
-  setManualQuickDraw(teamId: TeamId | null): void {
-    this.state.manual.quickDraw = this.state.manual.quickDraw === teamId ? null : teamId;
     this.changed();
   }
   setManualDest(teamId: TeamId, dest: string | null): void {
     this.state.manual.dests[teamId] = dest;
     this.changed();
   }
-  setManualCard(teamId: TeamId, card: CardId | null): void {
-    this.state.manual.cards[teamId] = this.state.manual.cards[teamId] === card ? null : card;
-    this.changed();
-  }
   setManualStars(slot: 0 | 1, stars: number): void {
     this.state.manual.stars[slot] = stars;
-    this.changed();
-  }
-  setManualFinal(teamId: TeamId, answer: number): void {
-    this.state.manual.finalAnswers[teamId] = this.state.manual.finalAnswers[teamId] === answer ? null : answer;
     this.changed();
   }
 
@@ -370,7 +357,7 @@ export class HostController {
         if (submitAnswer(this.state, playerId, String(p.phaseId), p.choice, this.now())) this.changedSoon();
         break;
       case "vote":
-        if (submitVote(this.state, playerId, String(p.phaseId), p.destination, p.card)) {
+        if (submitVote(this.state, playerId, String(p.phaseId), p.destination)) {
           this.scheduleTally();
           this.changedSoon();
         }

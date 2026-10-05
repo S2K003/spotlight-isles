@@ -1,4 +1,4 @@
-import type { CardId, Rating, TeamId, Tile } from "@/lib/engine/types";
+import type { Rating, TeamId, Tile } from "@/lib/engine/types";
 import type { LobbyMsg, MapMsg, PhaseMsg, TickMsg, VoteTallyMsg } from "./messages";
 import { createTransport, type Transport, type TransportStatus } from "./transport";
 
@@ -22,7 +22,7 @@ export interface ClientView {
   /** Live votes of my own team: destination → count. */
   tally: Record<string, number>;
   /** What I have already sent in the current phase. */
-  sent: { answer?: number | number[]; vote?: { dest: string; card: CardId | "none" }; rating?: Rating };
+  sent: { answer?: number; vote?: string; rating?: Rating };
   kicked: boolean;
 }
 
@@ -211,18 +211,19 @@ export class GameClient {
     this.set({ me });
   }
 
-  answer(choice: number | number[]): void {
+  /** Answers can be changed while the team is still discussing; the host keeps the latest. */
+  answer(choice: number): void {
     const phase = this.view.phase;
-    if (!phase || this.view.sent.answer !== undefined) return;
+    if (!phase) return;
     this.transport?.send("answer", { playerId: this.view.me.playerId, phaseId: phase.phaseId, choice });
     this.set({ sent: { ...this.view.sent, answer: choice } });
   }
 
-  vote(dest: string, card: CardId | "none"): void {
+  vote(dest: string): void {
     const phase = this.view.phase;
     if (!phase) return;
-    this.transport?.send("vote", { playerId: this.view.me.playerId, phaseId: phase.phaseId, destination: dest, card });
-    this.set({ sent: { ...this.view.sent, vote: { dest, card } } });
+    this.transport?.send("vote", { playerId: this.view.me.playerId, phaseId: phase.phaseId, destination: dest });
+    this.set({ sent: { ...this.view.sent, vote: dest } });
   }
 
   rate(speakerTeamId: TeamId, rating: Rating): void {

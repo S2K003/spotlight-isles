@@ -1,4 +1,4 @@
-import type { CardId, PhaseKind, PublicData, Rating, TeamId, Tile } from "@/lib/engine/types";
+import type { PhaseKind, PublicData, Rating, TeamId, Tile } from "@/lib/engine/types";
 
 /** Channel name for a room: `spotlight:{ROOMCODE}`. */
 export const channelName = (roomCode: string): string => `spotlight:${roomCode}`;
@@ -85,8 +85,8 @@ export interface ClientEvents {
   hello: { playerId: string };
   join: PlayerInfo;
   leave: { playerId: string };
-  answer: { playerId: string; phaseId: string; choice: number | number[] };
-  vote: { playerId: string; phaseId: string; destination: string; card?: CardId | "none" };
+  answer: { playerId: string; phaseId: string; choice: number };
+  vote: { playerId: string; phaseId: string; destination: string };
   rating: { playerId: string; phaseId: string; speakerTeamId: TeamId } & Rating;
 }
 

@@ -1,8 +1,9 @@
-import { CHESTS_AT_START, MAP_RADIUS, TILE_SHARE } from "@/config/balance";
+import { MAP_RADIUS, ROUTE_MAX, ROUTE_MIN, WEDGE } from "@/config/balance";
 import { CRITERIA, RUBRIC } from "@/config/rubric";
-import { corners, DIRS, hexDisk, key, neighbors, ring, wedgeOf } from "./hex";
+import { corners, DIRS, distance, hexDisk, key, neighbors, ORIGIN, ring, wedgeOf } from "./hex";
+import { costTo, indexTiles } from "./pathfinding";
 import { mulberry32, shuffle, type Rng } from "./rng";
-import type { CriterionKey, Hex, Tile } from "./types";
+import type { CriterionKey, Hex, TeamId, Tile } from "./types";
 
 export function homeHexes(): Hex[] {
   return corners(MAP_RADIUS);
@@ -12,54 +13,66 @@ export function regionOf(h: Hex): CriterionKey | "plaza" {
   return ring(h) <= 1 ? "plaza" : CRITERIA[wedgeOf(h)];
 }
 
-/** Keys of tiles that may never be water, fog or swamp: stage, plaza, homes and tiles next to a home. */
-export function protectedKeys(): Set<string> {
-  const out = new Set<string>();
-  out.add("0,0");
-  for (const d of DIRS) out.add(key(d));
-  for (const home of homeHexes()) {
-    out.add(key(home));
-    for (const n of neighbors(home)) out.add(key(n));
-  }
-  return out;
+/** Rotate a hex by 60° around the centre: wedge i maps onto wedge i+1. */
+export function rotate(h: Hex, times = 1): Hex {
+  let { q, r } = h;
+  for (let i = 0; i < ((times % 6) + 6) % 6; i++) [q, r] = [-r, q + r];
+  return { q, r };
 }
 
-function buildCandidate(rng: Rng): Tile[] {
-  const hexes = hexDisk(MAP_RADIUS);
-  const prot = protectedKeys();
-  const tiles: Tile[] = hexes.map((h) => {
+/**
+ * Design one wedge (home, water, fog, a key and a star) and rotate it six times, so every team
+ * faces exactly the same journey. Returns null if the layout breaks a rule.
+ */
+function buildCandidate(rng: Rng): Tile[] | null {
+  const home = DIRS[0].q * MAP_RADIUS;
+  const homeHex: Hex = { q: home, r: 0 };
+  const wedge0 = hexDisk(MAP_RADIUS).filter((h) => ring(h) >= 2 && wedgeOf(h) === 0 && key(h) !== key(homeHex));
+  const nearHome = new Set(neighbors(homeHex).map(key));
+
+  const pool = shuffle(rng, wedge0);
+  const take = (n: number, ok: (h: Hex) => boolean): Hex[] => {
+    const out: Hex[] = [];
+    for (let i = 0; i < pool.length && out.length < n; i++) {
+      if (ok(pool[i])) out.push(pool.splice(i--, 1)[0]);
+    }
+    return out;
+  };
+  // Nothing blocks the tiles right next to home.
+  const water = take(WEDGE.water, (h) => !nearHome.has(key(h)));
+  const fog = take(WEDGE.fog, (h) => !nearHome.has(key(h)));
+  const keys = take(WEDGE.keys, () => true);
+  const stars = take(WEDGE.stars, () => true);
+  if (water.length < WEDGE.water || fog.length < WEDGE.fog || keys.length < WEDGE.keys || stars.length < WEDGE.stars) return null;
+
+  const mark = new Map<string, "water" | "fog" | "key" | "star">();
+  for (let w = 0; w < 6; w++) {
+    for (const h of water) mark.set(key(rotate(h, w)), "water");
+    for (const h of fog) mark.set(key(rotate(h, w)), "fog");
+    for (const h of keys) mark.set(key(rotate(h, w)), "key");
+    for (const h of stars) mark.set(key(rotate(h, w)), "star");
+  }
+
+  // Heights come from the wedge-0 copy of each tile so the look is symmetric too.
+  const heightOf = new Map<string, number>();
+  const tiles: Tile[] = hexDisk(MAP_RADIUS).map((h) => {
     const d = ring(h);
     const region = regionOf(h);
-    const type = d === 0 ? "stage" : d === 1 ? "plaza" : "land";
+    const m = mark.get(key(h));
+    const type = d === 0 ? "stage" : d === 1 ? "plaza" : m === "water" ? "water" : m === "fog" ? "fog" : "land";
     const base = d === 0 ? 30 : d === 1 ? 18 : RUBRIC[region as CriterionKey].height;
-    return { q: h.q, r: h.r, type, region, height: Math.round(base + rng() * 6) };
-  });
-
-  const free = shuffle(
-    rng,
-    tiles.filter((t) => !prot.has(key(t))),
-  );
-  const total = tiles.length;
-  const nWater = Math.round(total * TILE_SHARE.water);
-  const nFog = Math.round(total * TILE_SHARE.fog);
-  const nSwamp = Math.round(total * TILE_SHARE.swamp);
-  free.slice(0, nWater).forEach((t) => {
-    t.type = "water";
-    t.height = 0;
-  });
-  free.slice(nWater, nWater + nFog).forEach((t) => (t.type = "fog"));
-  free.slice(nWater + nFog, nWater + nFog + nSwamp).forEach((t) => {
-    t.type = "swamp";
-    t.height = Math.max(3, t.height - 4);
+    const jitterKey = `${d}:${key(rotate(h, 6 - wedgeOf(h)))}`;
+    if (!heightOf.has(jitterKey)) heightOf.set(jitterKey, rng() * 6);
+    const tile: Tile = { q: h.q, r: h.r, type, region, height: type === "water" ? 0 : Math.round(base + heightOf.get(jitterKey)!) };
+    // Each key belongs to the team from the OPPOSITE island, so everyone has to cross the map.
+    if (m === "key") tile.key = ((wedgeOf(h) + 3) % 6) as TeamId;
+    if (m === "star") tile.star = true;
+    return tile;
   });
   return tiles;
 }
 
-/**
- * True if every non-water tile can be reached from the plaza without crossing water or the
- * Keynote Stage (which is locked during normal rounds). That covers both "all land is connected"
- * and "all homes can reach the plaza".
- */
+/** True if every non-water tile can be reached from the plaza without crossing water or the Stage. */
 export function isConnected(tiles: Tile[]): boolean {
   const idx = new Map<string, Tile>();
   for (const t of tiles) idx.set(key(t), t);
@@ -79,40 +92,35 @@ export function isConnected(tiles: Tile[]): boolean {
   return tiles.every((t) => !walkable(t) || seen.has(key(t)));
 }
 
-function placeStartingChests(tiles: Tile[], rng: Rng): void {
-  const homes = new Set(homeHexes().map(key));
-  // One chest per region, in the mid ring, so no team starts closer to treasure than another.
-  let placed = 0;
-  for (const c of CRITERIA) {
-    const options = shuffle(
-      rng,
-      tiles.filter((t) => t.region === c && t.type === "land" && !homes.has(key(t)) && ring(t) >= 2 && ring(t) <= 4),
-    );
-    if (options[0]) {
-      options[0].chest = true;
-      placed++;
-    }
+/** Fewest steps for a team to fly home → its own key → the Stage (fog counts double). */
+export function routeLength(tiles: Tile[], teamId: TeamId): number {
+  const index = indexTiles(tiles);
+  const homes = homeHexes();
+  const homeMap: Record<string, TeamId> = {};
+  homes.forEach((h, i) => (homeMap[key(h)] = i as TeamId));
+  let best = Infinity;
+  for (const t of tiles) {
+    if (t.key !== teamId) continue;
+    const toKey = costTo(index, homes[teamId], t, { teamId, homes: homeMap });
+    const toStage = costTo(index, t, ORIGIN, { teamId, homes: homeMap, allowStage: true });
+    best = Math.min(best, toKey + toStage);
   }
-  const rest = shuffle(
-    rng,
-    tiles.filter((t) => t.type === "land" && !t.chest && !homes.has(key(t))),
-  );
-  for (let i = 0; placed < CHESTS_AT_START && i < rest.length; i++, placed++) rest[i].chest = true;
+  return best;
 }
 
-/** Generate the map for a seed. Reseeds deterministically until the connectivity check passes. */
+/** Generate the map for a seed. Reseeds deterministically until every rule passes. */
 export function generateMap(seed: number): { tiles: Tile[]; seedUsed: number } {
-  for (let attempt = 0; attempt < 500; attempt++) {
+  for (let attempt = 0; attempt < 2000; attempt++) {
     const seedUsed = (seed + attempt * 7919) >>> 0;
-    const rng = mulberry32(seedUsed);
-    const tiles = buildCandidate(rng);
-    if (!isConnected(tiles)) continue;
+    const tiles = buildCandidate(mulberry32(seedUsed));
+    if (!tiles || !isConnected(tiles)) continue;
+    const route = routeLength(tiles, 0);
+    if (route < ROUTE_MIN || route > ROUTE_MAX) continue;
     homeHexes().forEach((h, i) => {
       const t = tiles.find((x) => x.q === h.q && x.r === h.r)!;
-      t.owner = i as Tile["owner"];
+      t.owner = i as TeamId;
     });
-    placeStartingChests(tiles, rng);
     return { tiles, seedUsed };
   }
-  throw new Error("mapgen: no connected map found");
+  throw new Error("mapgen: no fair map found");
 }

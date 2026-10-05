@@ -95,11 +95,11 @@ export const SPOTLIGHT_CRITERIA = [
   { key: "confidence", label: "Confidence", maps: "Delivery", hint: "Voice, pace and presence" },
 ] as const;
 
-export const OBJECTIVES_SHORT = ["Recognise strong presentations", "Pitch under time pressure", "Mark fairly with a rubric", "Decide fast as a team"];
+export const OBJECTIVES_SHORT = ["Recognise strong presentations", "Pitch as a team", "Mark fairly with a rubric", "Decide together"];
 
 export const LEARNING_OBJECTIVES = [
-  "Recognise what makes a presentation strong across six marking criteria.",
-  "Practise a short oral pitch under time pressure, with a hook, clarity and confidence.",
+  "Recognise what makes a research presentation strong: structure, visuals, delivery and handling questions.",
+  "Practise a short oral pitch as a team, with a hook, clarity and confidence.",
   "Practise assessing presentations against a rubric, fairly and consistently.",
-  "Make fast, collaborative team decisions through clear communication.",
+  "Make team decisions through discussion and clear communication.",
 ];

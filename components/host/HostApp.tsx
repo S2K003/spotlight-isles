@@ -1,12 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { RUBRIC } from "@/config/rubric";
 import { TEAM_DEFS } from "@/config/teams";
 import { AudioEngine } from "@/game/audio/sfx";
 import type { RenderEvent } from "@/game/render/MapRenderer";
 import { HostController, type HostView } from "@/lib/net/host";
-import { AccuracyStrip, Clock, Intro, PhaseBanner, QuestionPanel, ResolvePanel, Scoreboard, Slam, useClock, VotePanel, type SlamMsg } from "./Hud";
+import { Clock, Intro, Legend, PhaseBanner, QuestionPanel, ResolvePanel, ResultStrip, Scoreboard, Slam, useClock, VotePanel, type SlamMsg } from "./Hud";
 import { Lobby } from "./Lobby";
 import { ManualPanel } from "./ManualPanel";
 import { MapCanvas } from "./MapCanvas";
@@ -81,11 +80,8 @@ function Host({ ctl, lowFx }: { ctl: HostController; lowFx: boolean }) {
       }
     };
     const onVis = () => {
-      if (document.visibilityState === "visible") {
-        void request();
-      } else if (started && !view.over) {
-        setHiddenWarn(true);
-      }
+      if (document.visibilityState === "visible") void request();
+      else if (started && !view.over) setHiddenWarn(true);
     };
     void request();
     document.addEventListener("visibilitychange", onVis);
@@ -111,19 +107,18 @@ function Host({ ctl, lowFx }: { ctl: HostController; lowFx: boolean }) {
   /* ---- phase changes: banners, stings and music ---- */
   useEffect(() => {
     const a = audio.current!;
-    const data = view.publicData;
     if (started && !view.over) a.startMusic();
-    a.duck(kind === "spotSpeak");
+    // Keep the music low whenever people need to talk or listen.
+    a.duck(kind === "spotSpeak" || kind === "spotReady" || kind === "challenge" || kind === "vote");
     switch (kind) {
       case "intro":
         a.play("whoosh");
         break;
       case "challenge":
         a.play("banner");
-        showSlam(`ROUND ${view.phase?.round}`, data.criterion ? `${RUBRIC[data.criterion].icon} ${RUBRIC[data.criterion].label}` : undefined);
+        showSlam(`ROUND ${view.phase?.round}`, "💬 Team question");
         break;
       case "reveal":
-      case "finalReveal":
       case "spotReveal":
         a.play("reveal");
         break;
@@ -132,14 +127,10 @@ function Host({ ctl, lowFx }: { ctl: HostController; lowFx: boolean }) {
         break;
       case "spotReady":
         a.play("banner");
-        showSlam("SPOTLIGHT!", `Round ${view.phase?.round}`, "#fff1b8");
+        showSlam(`ROUND ${view.phase?.round}`, "🎤 Pitch round", "#fff1b8");
         break;
       case "spotSpeak":
         a.play("pop");
-        break;
-      case "finalBanner":
-        a.play("boom");
-        showSlam("FINAL SHOWDOWN", "The Keynote Stage awaits", "#c4b5fd");
         break;
       case "results":
         a.play("fanfare");
@@ -154,31 +145,19 @@ function Host({ ctl, lowFx }: { ctl: HostController; lowFx: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view.phaseVersion]);
 
-  // Ticking clock while teams decide.
-  useEffect(() => {
-    if (kind !== "vote") return;
-    let n = 0;
-    const id = setInterval(() => audio.current?.play(n++ % 2 ? "tock" : "tick"), 500);
-    return () => clearInterval(id);
-  }, [kind, view.phaseVersion]);
-
   const onRenderEvent = useCallback(
     (e: RenderEvent, teamId?: number) => {
       const a = audio.current;
       if (e === "step") a?.play("step");
-      else if (e === "paint") a?.play("splat");
-      else if (e === "clash") {
-        a?.play("clash");
-        showSlam("CLASH!", undefined, "#ff5a5a");
-      } else if (e === "chest") a?.play("chest");
-      else if (e === "card") a?.play("card");
-      else if (e === "micdrop") a?.play("boom");
-      else if (e === "flood") a?.play("whoosh");
+      else if (e === "turn") a?.play("pop");
+      else if (e === "blocked") a?.play("clash");
+      else if (e === "key") a?.play("chest");
+      else if (e === "star") a?.play("card");
       else if (e === "firework") a?.play("firework");
-      else if (e === "stage") {
+      else if (e === "dock") {
         a?.play("boom");
         a?.play("fanfare");
-        if (teamId !== undefined) showSlam(TEAM_DEFS[teamId].emblem, `${ctl.state.teams[teamId].name.toUpperCase()} TAKES THE STAGE! +100`, TEAM_DEFS[teamId].text);
+        if (teamId !== undefined) showSlam(TEAM_DEFS[teamId].emblem, `${ctl.state.teams[teamId].name.toUpperCase()} REACHES THE STAGE!`, TEAM_DEFS[teamId].text);
       }
     },
     [ctl, showSlam],
@@ -205,7 +184,7 @@ function Host({ ctl, lowFx }: { ctl: HostController; lowFx: boolean }) {
             }}
           />
         ) : (
-          <GameHud ctl={ctl} view={view} kind={kind} audio={audio.current} />
+          <GameHud ctl={ctl} view={view} kind={kind} />
         )}
         <Slam key={slam?.id ?? 0} msg={slam} />
         {started && hiddenWarn && (
@@ -226,12 +205,12 @@ function Host({ ctl, lowFx }: { ctl: HostController; lowFx: boolean }) {
   );
 }
 
-function GameHud({ ctl, view, kind, audio }: { ctl: HostController; view: HostView; kind: string; audio: AudioEngine }) {
+function GameHud({ ctl, view, kind }: { ctl: HostController; view: HostView; kind: string }) {
   const { frac, phaseMs } = useClock(ctl);
   const data = view.publicData;
   const speed = view.state.speed || 1;
   const seconds = Math.max(0, Math.ceil((phaseMs * speed) / 1000));
-  const collecting = kind === "challenge" || kind === "finalQ" || kind === "vote" || kind === "spotRate";
+  const collecting = kind === "challenge" || kind === "vote" || kind === "spotRate";
   const progress = ctl.inputProgress();
   const full = kind === "results" || kind === "debrief" || kind === "over";
 
@@ -241,42 +220,17 @@ function GameHud({ ctl, view, kind, audio }: { ctl: HostController; view: HostVi
       {!full && kind !== "intro" && <Scoreboard view={view} progress={collecting && !data.manualMode ? progress : null} />}
 
       {kind === "intro" && <Intro frac={frac} />}
-      {(kind === "challenge" || kind === "finalQ") && <QuestionPanel data={data} progress={progress} reveal={false} />}
-      {(kind === "reveal" || kind === "finalReveal") && <QuestionPanel data={data} progress={progress} reveal />}
-      {kind === "reveal" && <AccuracyStrip data={data} />}
-      {kind === "finalReveal" && data.final && (
-        <div className="absolute bottom-[352px] left-5 right-[440px] flex gap-3">
-          {data.teams.map((t) => {
-            const q = data.final!.perQ[data.final!.perQ.length - 1];
-            const passed = q?.passed[t.id];
-            const n = data.final!.bottom3.includes(t.id) ? 3 : 2;
-            return (
-              <div key={t.id} className="glossy flex-1 rounded-2xl px-3 py-2 text-center" style={{ borderColor: passed ? t.color : undefined, opacity: passed ? 1 : 0.55 }}>
-                <div className="truncate font-display text-[28px]" style={{ color: TEAM_DEFS[t.id].text }}>
-                  {t.name}
-                </div>
-                <div className="font-display text-[30px]">{passed ? `+${n} tiles 🌊` : "—"}</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {kind === "challenge" && <QuestionPanel data={data} progress={progress} reveal={false} />}
+      {kind === "reveal" && <QuestionPanel data={data} progress={progress} reveal />}
+      {kind === "reveal" && <ResultStrip data={data} bottom={345} />}
       {kind === "vote" && <VotePanel data={data} progress={progress} />}
+      {(kind === "vote" || kind === "resolve") && !data.manualMode && <Legend />}
       {kind === "resolve" && <ResolvePanel data={data} />}
-      {kind.startsWith("spot") && <SpotlightStage view={view} data={data} frac={frac} seconds={seconds} progress={progress} onReelTick={() => audio.play("reel")} />}
-      {kind === "finalBanner" && (
-        <div className="glossy absolute bottom-5 left-5 right-[440px] rounded-3xl px-8 py-4 text-[34px] font-extrabold">
-          🌙 3 rapid-fire true/false questions. Each one your team gets right floods <span className="text-gold">2 more tiles</span> — <span className="text-gold">3</span> if you&apos;re in the bottom three. Most correct takes the <span className="text-gold">Keynote Stage (+100)</span>.
-        </div>
-      )}
-      {kind === "finalFlood" && (
-        <div className="glossy absolute bottom-5 left-5 right-[440px] rounded-3xl px-8 py-4 text-center font-display text-[48px]">
-          {frac < 0.6 ? "🌊 Territory floods out…" : data.final?.stageWinner != null ? <span style={{ color: TEAM_DEFS[data.final.stageWinner].text }}>🎤 {data.teams[data.final.stageWinner].name.toUpperCase()} CAPTURES THE KEYNOTE STAGE!</span> : "The Keynote Stage stays unclaimed!"}
-        </div>
-      )}
+      {kind.startsWith("spot") && <SpotlightStage view={view} data={data} seconds={seconds} progress={progress} />}
+      {kind === "spotReveal" && <ResultStrip data={data} bottom={330} />}
 
       {kind === "results" && data.results && <Results data={data} results={data.results} frac={frac} />}
-      {(kind === "debrief" || kind === "over") && (view.state.debrief ? <Debrief debrief={view.state.debrief} over={kind === "over"} /> : null)}
+      {(kind === "debrief" || kind === "over") && view.state.debrief && <Debrief debrief={view.state.debrief} over={kind === "over"} />}
 
       <Clock ctl={ctl} view={view} />
       {view.state.manualMode && <ManualPanel ctl={ctl} view={view} />}

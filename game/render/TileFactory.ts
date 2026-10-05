@@ -15,7 +15,9 @@ export interface TileView {
   root: Container;
   overlay: Graphics;
   decor: Container | null;
-  chest: Container | null;
+  /** A key or star sitting on this tile. */
+  token: Container | null;
+  tokenKind: string;
   /** Animated bits registered by the decor: called every frame with (time s, dt s). */
   tick: ((t: number, dt: number) => void) | null;
   owner: TeamId | undefined;
@@ -103,17 +105,6 @@ function decorate(tile: Tile, cx: number, cy: number): { view: Container; tick: 
     return { view, tick: null };
   }
   if (tile.type === "water") return null;
-  if (tile.type === "swamp") {
-    g.ellipse(-6, 2, 20, 10).fill({ color: 0x3d4a22, alpha: 0.75 });
-    g.ellipse(10, -4, 9, 5).fill({ color: 0x4d5d2b, alpha: 0.8 });
-    // A tiny sinking slide.
-    const slide = new Graphics();
-    slide.roundRect(-8, -6, 16, 11, 1.5).fill({ color: 0xf2f2f2 }).stroke({ width: 1, color: 0x666666 });
-    slide.rect(-5, -3, 10, 1.4).fill({ color: 0x888888 }).rect(-5, 0, 7, 1.4).fill({ color: 0x888888 });
-    slide.rotation = -0.3;
-    view.addChild(slide);
-    return { view, tick: (t) => { slide.y = 1 + Math.sin(t * 0.8 + phase) * 3; slide.alpha = 0.55 + Math.sin(t * 0.8 + phase) * 0.3; } };
-  }
   if (tile.type === "fog") {
     const puffs: Graphics[] = [];
     for (let i = 0; i < 3; i++) {
@@ -240,28 +231,44 @@ function decorate(tile: Tile, cx: number, cy: number): { view: Container; tick: 
   }
 }
 
-export function makeChest(): Container {
+/** A team's key: a golden key on a disc in the team's colour, with its emblem, so each crew can spot its own. */
+export function makeKey(teamId: TeamId): Container {
+  const def = TEAM_DEFS[teamId];
+  const color = cssToNum(def.color);
   const c = new Container();
-  const glow = new Graphics().ellipse(0, 2, 22, 12).fill({ color: 0xffe27a, alpha: 0.45 });
+  const glow = new Graphics().ellipse(0, 4, 26, 13).fill({ color: lighten(color, 0.3), alpha: 0.55 });
   const g = new Graphics();
-  g.roundRect(-12, -12, 24, 15, 3).fill({ color: 0x9a5b1e }).stroke({ width: 1.5, color: 0x5c3310 });
-  g.roundRect(-13, -19, 26, 9, 4).fill({ color: 0xc27a2a }).stroke({ width: 1.5, color: 0x5c3310 });
-  g.rect(-13, -11.5, 26, 2.5).fill({ color: 0xffd54a });
-  g.roundRect(-3, -13, 6, 7, 1.5).fill({ color: 0xffe89a }).stroke({ width: 1, color: 0x8a6a10 });
+  g.circle(0, -20, 17).fill({ color }).stroke({ width: 3, color: 0xffffff });
+  // Key shape: bow, shaft and two teeth.
+  g.circle(-5, -20, 5.5).fill({ color: 0xffe27a }).stroke({ width: 1.5, color: 0x6b4a10 });
+  g.circle(-5, -20, 2).fill({ color: darken(color, 0.2) });
+  g.rect(0, -21.5, 12, 3).fill({ color: 0xffe27a });
+  g.rect(7, -18.5, 2.2, 4).fill({ color: 0xffe27a }).rect(10.5, -18.5, 2.2, 3).fill({ color: 0xffe27a });
+  drawEmblem(g, def.shape, 0, -44, 7, 0xffffff);
+  drawEmblem(g, def.shape, 0, -44, 5.4, darken(color, 0.1));
   c.addChild(glow, g);
   return c;
 }
 
-/** Territory overlay: team-coloured top face plus the team's emblem, so ownership never relies on colour alone. */
+/** A bonus star. */
+export function makeStar(): Container {
+  const c = new Container();
+  const glow = new Graphics().ellipse(0, 4, 22, 11).fill({ color: 0xfff1a8, alpha: 0.5 });
+  const g = new Graphics();
+  g.star(0, -16, 5, 15, 7).fill({ color: 0xffd54a }).stroke({ width: 2, color: 0x9a6a00 });
+  g.star(-2, -18, 5, 6, 3).fill({ color: 0xfff6c8, alpha: 0.8 });
+  c.addChild(glow, g);
+  return c;
+}
+/** Trail overlay: the colour and emblem of the last crew to fly over a tile (decoration only; homes are solid). */
 export function drawOverlay(g: Graphics, view: TileView, owner: TeamId | undefined, shielded = false): void {
   g.clear();
   if (owner === undefined) return;
   const def = TEAM_DEFS[owner];
   const color = cssToNum(def.color);
   const pts = topPoints(view.cx, view.cy, view.tile.height);
-  g.poly(pts, true).fill({ color, alpha: 0.62 }).stroke({ width: 2.5, color: lighten(color, 0.35), alpha: 0.9 });
+  g.poly(pts, true).fill({ color, alpha: shielded ? 0.75 : 0.4 }).stroke({ width: 2.5, color: lighten(color, 0.35), alpha: 0.85 });
   drawEmblem(g, def.shape, 0, -view.tile.height + 10, 7.5, darken(color, 0.45), 0.8);
-  if (shielded) g.poly(pts, true).stroke({ width: 4, color: 0xffffff, alpha: 0.9 });
 }
 
 export function buildTile(tile: Tile): TileView {
@@ -283,7 +290,8 @@ export function buildTile(tile: Tile): TileView {
     root,
     overlay,
     decor: null,
-    chest: null,
+    token: null,
+    tokenKind: "",
     tick: null,
     owner: undefined,
   };

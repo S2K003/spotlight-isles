@@ -1,16 +1,17 @@
 import gsap from "gsap";
 import { Application, Container, DisplacementFilter, Graphics, Sprite, Texture } from "pixi.js";
 import { AdvancedBloomFilter } from "pixi-filters";
+import { MAP_RADIUS } from "@/config/balance";
 import { TEAM_DEFS, cssToNum } from "@/config/teams";
-import type { FinalClaim, MoveResult, TeamId, TeamPublic, Tile } from "@/lib/engine/types";
+import type { MoveResult, TeamId, TeamPublic, Tile } from "@/lib/engine/types";
 import { darken, hexCenter, hexCorners, HEX_SIZE, lighten, mix } from "./layout";
 import { Particles } from "./Particles";
 import { Ship } from "./Ships";
-import { Clouds, LIGHT, Spotlights, type TimeOfDay } from "./Sky";
-import { buildTile, drawOverlay, makeChest, type TileView } from "./TileFactory";
+import { Clouds, LIGHT, type TimeOfDay } from "./Sky";
+import { buildTile, drawOverlay, makeKey, makeStar, type TileView } from "./TileFactory";
 
-export type RenderEvent = "step" | "paint" | "clash" | "chest" | "micdrop" | "card" | "flood" | "stage" | "firework";
-export type CameraMode = "lobby" | "intro" | "play" | "action" | "final";
+export type RenderEvent = "step" | "blocked" | "key" | "star" | "dock" | "turn" | "firework";
+export type CameraMode = "lobby" | "intro" | "play" | "action";
 
 export interface RendererOpts {
   lowFx?: boolean;
@@ -25,11 +26,11 @@ export interface Insets {
   bottom: number;
 }
 
-const MAP_W = HEX_SIZE * 1.5 * 12 + HEX_SIZE * 2 + 40;
-const MAP_H = 760;
-const MAP_CY = -8;
+const MAP_W = HEX_SIZE * 1.5 * MAP_RADIUS * 2 + HEX_SIZE * 2 + 60;
+const MAP_H = HEX_SIZE * Math.sqrt(3) * 0.64 * MAP_RADIUS * 2 + 190;
+const MAP_CY = -12;
 
-/** The projector scene: pseudo-3D hex archipelago, ships, particles, clouds, camera and all move animations. */
+/** The projector scene: pseudo-3D hex islands, ships, tokens, particles, clouds, camera and the move animations. */
 export class MapRenderer {
   private app!: Application;
   private world = new Container();
@@ -40,17 +41,14 @@ export class MapRenderer {
   private fxLayer = new Container();
   private particles!: Particles;
   private clouds = new Clouds();
-  private spotlights = new Spotlights();
   private views = new Map<string, TileView>();
   private tickers: TileView[] = [];
-  private chests: TileView[] = [];
-  private swamps: TileView[] = [];
+  private tokens: TileView[] = [];
   private ships: Ship[] = [];
   private shipMoving: boolean[] = [false, false, false, false, false, false];
-  private fright: boolean[] = [false, false, false, false, false, false];
+  private homes = new Map<string, TeamId>();
   private ctx = gsap.context(() => {});
   private dispSprite: Sprite | null = null;
-  private bloom: AdvancedBloomFilter | null = null;
   private t = 0;
   private destroyed = false;
   private insets: Insets = { left: 0, right: 0, top: 0, bottom: 0 };
@@ -97,7 +95,7 @@ export class MapRenderer {
     this.tileLayer.sortableChildren = true;
     this.shipLayer.sortableChildren = true;
     this.world.addChild(this.under, this.waterLayer, this.tileLayer, this.shipLayer, this.particles.view, this.fxLayer);
-    app.stage.addChild(this.clouds.back, this.world, this.spotlights.view, this.clouds.front);
+    app.stage.addChild(this.clouds.back, this.world, this.clouds.front);
 
     const font = this.opts.font ?? "sans-serif";
     for (const def of TEAM_DEFS) {
@@ -136,9 +134,7 @@ export class MapRenderer {
       this.dispSprite.renderable = false;
       this.world.addChildAt(this.dispSprite, 0);
       this.waterLayer.filters = [new DisplacementFilter({ sprite: this.dispSprite, scale: 14 })];
-
-      this.bloom = new AdvancedBloomFilter({ threshold: 0.8, bloomScale: 0.42, brightness: 1, blur: 5, quality: 4 });
-      this.world.filters = [this.bloom];
+      this.world.filters = [new AdvancedBloomFilter({ threshold: 0.8, bloomScale: 0.42, brightness: 1, blur: 5, quality: 4 })];
     } catch {
       this.disableFx();
     }
@@ -148,7 +144,6 @@ export class MapRenderer {
     this.lowFx = true;
     this.world.filters = [];
     this.waterLayer.filters = [];
-    this.bloom = null;
     this.particles?.setCap(350);
   }
 
@@ -183,13 +178,10 @@ export class MapRenderer {
 
   setMode(mode: CameraMode): void {
     this.mode = mode;
-    this.spotlights.show(mode === "final");
   }
 
   private layout(): void {
-    const w = this.app.screen.width, h = this.app.screen.height;
-    this.clouds.layout(w, h);
-    this.spotlights.layout(w, h);
+    this.clouds.layout(this.app.screen.width, this.app.screen.height);
   }
 
   private updateCamera(dt: number): void {
@@ -204,24 +196,22 @@ export class MapRenderer {
     let tz = 1, tx = 0, ty = MAP_CY;
     const drift = this.t * 0.25;
     if (this.mode === "lobby") {
-      tz = 0.9;
-      tx = Math.sin(drift * 0.6) * 30;
+      tz = 0.92;
+      tx = Math.sin(drift * 0.6) * 20;
     } else if (this.mode === "intro") {
-      // Fly over the archipelago: one slow lap around the map.
-      tz = 1.55;
-      tx = Math.cos(this.t * 0.17) * 250;
-      ty = Math.sin(this.t * 0.17) * 150;
+      // Fly over the islands: one slow lap around the map.
+      tz = 1.45;
+      tx = Math.cos(this.t * 0.17) * 150;
+      ty = Math.sin(this.t * 0.17) * 90;
     } else if (this.mode === "action") {
       tz = this.cam.tz;
       tx = this.cam.tx;
       ty = this.cam.ty;
-    } else if (this.mode === "final") {
-      tz = 1.06 + Math.sin(this.t * 0.3) * 0.04;
     }
-    tx += Math.sin(drift) * 7;
-    ty += Math.cos(drift * 0.8) * 4;
+    tx += Math.sin(drift) * 6;
+    ty += Math.cos(drift * 0.8) * 3;
 
-    const ease = Math.min(1, dt * 2.2);
+    const ease = Math.min(1, dt * 2.4);
     this.cam.x += (tx - this.cam.x) * ease;
     this.cam.y += (ty - this.cam.y) * ease;
     this.cam.zoom += (tz - this.cam.zoom) * ease;
@@ -230,7 +220,6 @@ export class MapRenderer {
     const z = fit * this.cam.zoom;
     const sx = (Math.random() - 0.5) * this.cam.shake, sy = (Math.random() - 0.5) * this.cam.shake;
     this.world.scale.set(z);
-    this.world.rotation = this.mode === "final" ? Math.sin(this.t * 0.16) * 0.045 : this.world.rotation * (1 - ease);
     this.world.position.set(il + aw / 2 - this.cam.x * z + sx, it + ah / 2 - this.cam.y * z + sy);
   }
 
@@ -262,7 +251,7 @@ export class MapRenderer {
       const v = this.views.get(`${tile.q},${tile.r}`);
       if (!v) continue;
       this.setOwner(v, tile.owner);
-      this.setChest(v, !!tile.chest);
+      this.setToken(v, tile.key !== undefined ? `key${tile.key}` : tile.star ? "star" : "");
     }
   }
 
@@ -271,13 +260,13 @@ export class MapRenderer {
     for (const v of this.views.values()) v.root.destroy({ children: true });
     this.views.clear();
     this.tickers = [];
-    this.chests = [];
-    this.swamps = [];
+    this.tokens = [];
     this.under.clear();
 
     const corners = hexCorners();
+    const span = HEX_SIZE * 1.5 * MAP_RADIUS;
     // Soft drop shadow, then the rocky underside of the floating islands.
-    this.under.ellipse(0, 250, 470, 150).fill({ color: 0x0a1030, alpha: 0.16 });
+    this.under.ellipse(0, span * 0.62, span * 1.15, span * 0.36).fill({ color: 0x0a1030, alpha: 0.16 });
     for (const pass of [{ dy: 62, s: 0.74, c: 0x1c2038 }, { dy: 36, s: 0.9, c: 0x2c3150 }]) {
       for (const tile of tiles) {
         if (tile.type === "water") continue;
@@ -295,7 +284,6 @@ export class MapRenderer {
       this.views.set(v.key, v);
       (tile.type === "water" ? this.waterLayer : this.tileLayer).addChild(v.root);
       if (v.tick) this.tickers.push(v);
-      if (tile.type === "swamp") this.swamps.push(v);
       if (tile.type === "water") {
         const shine = new Graphics();
         shine.moveTo(-18, -2).lineTo(-4, -2).moveTo(4, 6).lineTo(20, 6).moveTo(-10, 12).lineTo(2, 12).stroke({ width: 2, color: 0xdff5ff, alpha: 0.7 });
@@ -306,25 +294,27 @@ export class MapRenderer {
     }
   }
 
-  private setOwner(v: TileView, owner: TeamId | undefined, shielded = false): void {
-    if (v.owner === owner && !shielded) return;
+  private setOwner(v: TileView, owner: TeamId | undefined): void {
+    if (v.owner === owner) return;
     v.owner = owner;
-    drawOverlay(v.overlay, v, owner, shielded);
+    drawOverlay(v.overlay, v, owner, owner !== undefined && this.homes.get(v.key) === owner);
   }
 
-  private setChest(v: TileView, on: boolean): void {
-    if (on && !v.chest) {
-      v.chest = makeChest();
-      v.chest.y = -v.tile.height - 2;
-      v.root.addChild(v.chest);
-      this.chests.push(v);
-      v.chest.scale.set(0);
-      this.tween(v.chest.scale, { x: 1, y: 1, duration: 0.5, ease: "back.out(2.5)" });
-    } else if (!on && v.chest) {
-      v.chest.destroy({ children: true });
-      v.chest = null;
-      this.chests = this.chests.filter((c) => c !== v);
+  private setToken(v: TileView, kind: string): void {
+    if (v.tokenKind === kind) return;
+    if (v.token) {
+      v.token.destroy({ children: true });
+      v.token = null;
+      this.tokens = this.tokens.filter((c) => c !== v);
     }
+    v.tokenKind = kind;
+    if (!kind) return;
+    v.token = kind === "star" ? makeStar() : makeKey(Number(kind.slice(3)) as TeamId);
+    v.token.y = -v.tile.height - 2;
+    v.root.addChild(v.token);
+    this.tokens.push(v);
+    v.token.scale.set(0);
+    this.tween(v.token.scale, { x: 1, y: 1, duration: 0.5, ease: "back.out(2.5)" });
   }
 
   private top(key: string): { x: number; y: number } | null {
@@ -332,45 +322,53 @@ export class MapRenderer {
     return v ? { x: v.cx, y: v.top } : null;
   }
 
-  /** Flip a tile to a team with a splash. */
-  private paint(key: string, teamId: TeamId, big = false): void {
+  /** Leave a trail on a tile with a small splash. */
+  private trail(key: string, teamId: TeamId): void {
     const v = this.views.get(key);
-    if (!v) return;
+    if (!v || v.tile.type === "stage") return;
     this.setOwner(v, teamId);
     const color = cssToNum(TEAM_DEFS[teamId].color);
     v.overlay.scale.set(0.2);
     this.tween(v.overlay.scale, { x: 1, y: 1, duration: 0.38, ease: "back.out(2.2)" });
-    this.particles.emit(v.cx, v.top, color, { count: big ? 16 : 10, speed: 150, life: 0.55, size: 0.3, up: 60 });
-    this.particles.emit(v.cx, v.top, lighten(color, 0.5), { count: 4, speed: 80, life: 0.4, size: 0.2 });
-    this.emit("paint", teamId);
+    this.particles.emit(v.cx, v.top, color, { count: 8, speed: 130, life: 0.5, size: 0.28, up: 50 });
   }
 
   /* ---------- ships ---------- */
+
+  /** Where a ship sits: on its tile, or in a ring around the Stage once docked. */
+  private shipSpot(team: Pick<TeamPublic, "pos" | "docked">): { x: number; y: number } {
+    const p = this.top(`${team.pos.q},${team.pos.r}`) ?? hexCenter(team.pos);
+    if (team.docked === null) return p;
+    const a = -Math.PI / 2 + ((team.docked - 1) * Math.PI) / 3;
+    return { x: p.x + Math.cos(a) * 30, y: p.y + Math.sin(a) * 17 };
+  }
+
+  /** Tell the renderer which tiles are homes (drawn solid). Call before the first syncTiles. */
+  setHomes(teams: Pick<TeamPublic, "id" | "home">[]): void {
+    this.homes = new Map(teams.map((t) => [`${t.home.q},${t.home.r}`, t.id]));
+  }
 
   syncTeams(teams: TeamPublic[], force = false): void {
     if (!force && performance.now() < this.busyUntil) {
       this.pendingTeams = teams;
       return;
     }
+    this.homes = new Map(teams.map((t) => [`${t.home.q},${t.home.r}`, t.id]));
     for (const team of teams) {
-      const p = this.top(`${team.pos.q},${team.pos.r}`) ?? { x: hexCenter(team.pos).x, y: hexCenter(team.pos).y };
+      const p = this.shipSpot(team);
       const ship = this.ships[team.id];
       ship.view.position.set(p.x, p.y);
       ship.view.zIndex = p.y;
+      ship.view.scale.set(team.docked === null ? 1 : 0.72);
     }
   }
 
-  /** MP badges over each ship (null hides them). */
-  setBadges(mp: (number | null)[] | null, fright?: boolean[]): void {
-    this.ships.forEach((ship, i) => {
-      const v = mp?.[i];
-      const isFright = !!fright?.[i];
-      this.fright[i] = isFright;
-      ship.setBadge(v === null || v === undefined ? null : isFright ? "STAGE FRIGHT" : `${v} MP`, isFright);
-    });
+  /** Badges over each ship, e.g. "1st · 3 steps" (null hides them). */
+  setBadges(labels: (string | null)[] | null): void {
+    this.ships.forEach((ship, i) => ship.setBadge(labels?.[i] ?? null));
   }
 
-  /** Per-team "votes in" ring (0..1), or null to hide. Rivals' choices stay hidden. */
+  /** Per-team "votes in" ring (0..1), or null to hide. */
   setVoteProgress(p: number[] | null): void {
     this.ships.forEach((ship, i) => ship.setProgress(p ? p[i] : -1));
   }
@@ -378,134 +376,103 @@ export class MapRenderer {
   /* ---------- move resolution ---------- */
 
   /**
-   * Animate one round's resolution: all ships move at once, one hex per step, painting as they
-   * go; then clashes, card effects and chest pickups. Returns the animation length in ms.
+   * Animate one round. `moves` are in move order (most points first) and are played one after
+   * another, so the room can follow each ship: fly, leave a trail, grab keys and stars, bump into
+   * a ship that got there first, or dock at the Stage.
    */
-  playResolution(moves: MoveResult[], tilesAfter: Tile[], teamsAfter: TeamPublic[], durationMs: number): number {
-    const maxSteps = Math.max(1, ...moves.map((m) => m.path.length - 1));
-    const step = Math.max(0.03, Math.min(0.28, (durationMs / 1000) * 0.5 / maxSteps));
-    const quick = step < 0.2;
-    const travel = maxSteps * step;
-    const total = Math.min(durationMs / 1000 - 0.05, travel + (quick ? step * 4 : 1.6));
+  playResolution(moves: MoveResult[], tilesAfter: Tile[], teamsAfter: TeamPublic[], durationMs: number): void {
+    const dur = durationMs / 1000;
+    const movers = moves.filter((m) => m.path.length > 1 || m.blockedAt);
+    const slot = Math.min(2.1, (dur * 0.86) / Math.max(1, movers.length));
+    const total = Math.min(dur - 0.05, slot * movers.length + 0.4);
     this.busyUntil = performance.now() + total * 1000;
     this.pendingTiles = tilesAfter;
     this.pendingTeams = teamsAfter;
+    if (movers.length) this.mode = "action";
 
-    // Zoom slightly toward the action.
-    const movers = moves.filter((m) => m.path.length > 1);
-    if (movers.length) {
-      let sx = 0, sy = 0;
-      for (const m of movers) {
-        const end = hexCenter(m.path[m.path.length - 1]);
-        sx += end.x; sy += end.y;
-      }
-      this.cam.tx = (sx / movers.length) * 0.35;
-      this.cam.ty = (sy / movers.length) * 0.35 + MAP_CY;
-      this.cam.tz = 1.1;
-      this.mode = "action";
-    }
-
-    for (const m of moves) {
+    movers.forEach((m, i) => {
       const ship = this.ships[m.teamId];
       const color = ship.color;
-      const origin = this.top(`${m.path[0].q},${m.path[0].r}`);
-      if (!origin) continue;
+      const hops = m.path.length - 1;
+      const step = hops ? Math.min(0.3, (slot * 0.62) / hops) : 0;
+      const start = i * slot;
+      const after = teamsAfter[m.teamId];
 
-      // Card effects fire first.
-      for (const fx of m.cardFx) {
-        if (fx.card === "hook") {
-          this.particles.emit(origin.x, origin.y - 50, 0xffd54a, { count: 22, speed: 160, life: 0.8, size: 0.32, gravity: -80 });
-          this.emit("card", m.teamId);
-        } else if (fx.card === "rehearsed") {
-          for (const v of this.views.values()) {
-            if (v.owner !== m.teamId) continue;
-            drawOverlay(v.overlay, v, m.teamId, true);
-            this.later(total, () => drawOverlay(v.overlay, v, v.owner, false));
-          }
-          this.emit("card", m.teamId);
-        } else if (fx.card === "heckler") {
-          const target = this.ships[fx.target].view;
-          for (let i = 0; i < 6; i++) {
-            this.later(i * 0.06, () => {
-              const k = i / 5;
-              this.particles.emit(origin.x + (target.x - origin.x) * k, origin.y - 40 + (target.y - origin.y) * k, 0xff5a5a, { count: 5, speed: 60, life: 0.5, size: 0.3 });
-            });
-          }
-          this.later(0.36, () => { this.kick(this.ships[fx.target], 0, -10); });
-          this.emit("card", m.teamId);
-        }
-      }
-
-      if (m.path.length > 1) {
-        this.shipMoving[m.teamId] = true;
+      this.later(start, () => {
+        // The camera follows whoever's turn it is.
+        const end = hexCenter(m.path[m.path.length - 1]);
+        this.cam.tx = end.x * 0.4;
+        this.cam.ty = end.y * 0.4 + MAP_CY;
+        this.cam.tz = 1.12;
+        this.shipMoving[m.teamId] = hops > 0;
         ship.spin = 2.4;
-        m.path.slice(1).forEach((h, i) => {
-          const p = this.top(`${h.q},${h.r}`);
-          if (!p) return;
-          const k = `${h.q},${h.r}`;
-          this.tween(ship.view, {
-            x: p.x,
-            y: p.y,
-            duration: step,
-            delay: i * step,
-            ease: "sine.inOut",
-            onComplete: () => {
-              ship.view.zIndex = p.y;
-              if (m.painted.includes(k)) this.paint(k, m.teamId);
-              this.emit("step", m.teamId);
-            },
-          });
-        });
-      }
+        this.emit("turn", m.teamId);
+      });
 
-      const arrive = (m.path.length - 1) * step;
-      this.later(arrive + 0.01, () => {
+      m.path.slice(1).forEach((h, s) => {
+        const k = `${h.q},${h.r}`;
+        const last = s === hops - 1;
+        const p = last && m.docked ? this.shipSpot(after) : this.top(k);
+        if (!p) return;
+        this.tween(ship.view, {
+          x: p.x,
+          y: p.y,
+          duration: step,
+          delay: start + s * step,
+          ease: "sine.inOut",
+          onComplete: () => {
+            ship.view.zIndex = p.y;
+            this.trail(k, m.teamId);
+            this.emit("step", m.teamId);
+            const v = this.views.get(k);
+            if (!v || !v.token) return;
+            if (v.tokenKind === `key${m.teamId}` && m.gotKey) {
+              this.setToken(v, "");
+              this.particles.emit(p.x, p.y - 20, 0xffe27a, { count: 28, speed: 220, life: 0.9, size: 0.3, up: 120 });
+              this.ring(p.x, p.y, color, 90);
+              this.emit("key", m.teamId);
+            } else if (v.tokenKind === "star" && m.stars.includes(k)) {
+              this.setToken(v, "");
+              this.particles.emit(p.x, p.y - 16, 0xffd54a, { count: 18, speed: 180, life: 0.7, size: 0.26, up: 100 });
+              this.emit("star", m.teamId);
+            }
+          },
+        });
+      });
+
+      this.later(start + hops * step + 0.02, () => {
         this.shipMoving[m.teamId] = false;
         ship.spin = 1;
         const end = m.path[m.path.length - 1];
-        const endKey = `${end.q},${end.r}`;
-        const here = this.top(endKey);
+        const here = this.top(`${end.q},${end.r}`);
         if (!here) return;
-
-        if (m.clashAt) {
-          const at = this.top(`${m.clashAt.q},${m.clashAt.r}`);
+        if (m.blockedAt) {
+          // Someone got there first: lunge at the taken hex and bounce back.
+          const at = this.top(`${m.blockedAt.q},${m.blockedAt.r}`);
           if (at) {
-            // Lunge at the contested tile, flash, and bounce back.
-            const dx = (at.x - here.x) * 0.55, dy = (at.y - here.y) * 0.55;
-            this.tween(ship.kick, { x: dx, y: dy, duration: quick ? step : 0.16, ease: "power2.in", yoyo: true, repeat: 1 });
-            this.later(quick ? step : 0.16, () => {
-              this.particles.emit(here.x + dx, here.y + dy - 30, 0xfff2a8, { count: 26, speed: 280, life: 0.5, size: 0.28, gravity: 200 });
-              this.particles.emit(here.x + dx, here.y + dy - 30, color, { count: 12, speed: 180, life: 0.6, size: 0.3 });
-              this.flash(here.x + dx, here.y + dy - 30, 0xffffff);
-              this.shake(16);
-              this.cam.tz = 1.22;
-              this.later(0.35, () => (this.cam.tz = 1.1));
-              this.emit("clash", m.teamId);
+            const dx = (at.x - here.x) * 0.5, dy = (at.y - here.y) * 0.5;
+            const d = Math.min(0.16, slot * 0.12);
+            this.tween(ship.kick, { x: dx, y: dy, duration: d, ease: "power2.in", yoyo: true, repeat: 1 });
+            this.later(d, () => {
+              this.particles.emit(here.x + dx, here.y + dy - 30, 0xfff2a8, { count: 20, speed: 240, life: 0.45, size: 0.26, gravity: 200 });
+              this.shake(10);
+              this.emit("blocked", m.teamId);
             });
           }
         }
-
-        const mic = m.cardFx.find((f) => f.card === "micdrop");
-        if (mic && mic.card === "micdrop") {
-          this.ring(here.x, here.y, color, 150);
-          this.shake(10);
-          mic.tiles.forEach((k, i) => this.later(0.08 + i * 0.05, () => this.paint(k, m.teamId, true)));
-          this.emit("micdrop", m.teamId);
+        if (m.docked) {
+          ship.view.scale.set(0.72);
+          this.ring(here.x, here.y, color, 200);
+          this.particles.emit(here.x, here.y - 20, color, { count: 50, speed: 320, life: 1.1, size: 0.36, up: 180 });
+          this.particles.emit(here.x, here.y - 20, 0xffffff, { count: 16, speed: 200, life: 0.8, size: 0.22, up: 200 });
+          this.shake(12);
+          this.fireworks = { color, until: this.t + Math.min(1.6, slot * 0.8), next: this.t };
+          this.emit("dock", m.teamId);
         }
-
-        if (m.pickup) {
-          const v = this.views.get(endKey);
-          if (v) this.setChest(v, false);
-          this.particles.emit(here.x, here.y - 10, 0xffe27a, { count: 30, speed: 220, life: 0.9, size: 0.3, up: 120 });
-          this.particles.emit(here.x, here.y - 10, 0xffffff, { count: 10, speed: 120, life: 0.6, size: 0.2, up: 160 });
-          this.emit("chest", m.teamId);
-        }
-        if (m.swamp) this.particles.emit(here.x, here.y, 0x7c8f3a, { count: 14, speed: 70, life: 0.9, size: 0.34, gravity: 40 });
       });
-    }
+    });
 
     this.later(total, () => this.finishAnimation());
-    return total * 1000;
   }
 
   private finishAnimation(): void {
@@ -519,19 +486,6 @@ export class MapRenderer {
     this.pendingTeams = null;
   }
 
-  private kick(ship: Ship, x: number, y: number): void {
-    this.tween(ship.kick, { x, y, duration: 0.1, yoyo: true, repeat: 3, ease: "sine.inOut" });
-  }
-
-  private flash(x: number, y: number, color: number): void {
-    const g = new Graphics().circle(0, 0, 60).fill({ color, alpha: 0.85 });
-    g.position.set(x, y);
-    g.scale.set(0.2);
-    this.fxLayer.addChild(g);
-    this.tween(g.scale, { x: 1.6, y: 1.6, duration: 0.3, ease: "power2.out" });
-    this.tween(g, { alpha: 0, duration: 0.3, ease: "power2.out", onComplete: () => g.destroy() });
-  }
-
   private ring(x: number, y: number, color: number, radius: number): void {
     const g = new Graphics().ellipse(0, 0, radius, radius * 0.62).stroke({ width: 10, color: lighten(color, 0.4), alpha: 0.95 });
     g.position.set(x, y);
@@ -539,40 +493,6 @@ export class MapRenderer {
     this.fxLayer.addChild(g);
     this.tween(g.scale, { x: 1, y: 1, duration: 0.55, ease: "power2.out" });
     this.tween(g, { alpha: 0, duration: 0.55, ease: "power1.in", onComplete: () => g.destroy() });
-  }
-
-  /* ---------- final showdown ---------- */
-
-  /** Territory floods out in three waves, then the Keynote Stage is captured with fireworks. */
-  playFlood(claims: FinalClaim[], stageWinner: TeamId | null, tilesAfter: Tile[], teamsAfter: TeamPublic[], durationMs: number): void {
-    const dur = durationMs / 1000;
-    this.busyUntil = performance.now() + dur * 0.8 * 1000;
-    this.pendingTiles = tilesAfter;
-    this.pendingTeams = teamsAfter;
-    const waves = Math.max(1, ...claims.map((c) => c.wave + 1));
-    const waveLen = (dur * 0.55) / waves;
-    for (let w = 0; w < waves; w++) {
-      const inWave = claims.filter((c) => c.wave === w);
-      this.later(w * waveLen + 0.2, () => this.emit("flood"));
-      inWave.forEach((c, i) => {
-        this.later(w * waveLen + 0.2 + (i / Math.max(1, inWave.length)) * waveLen * 0.8, () => this.paint(c.key, c.teamId, true));
-      });
-    }
-    this.later(dur * 0.62, () => {
-      if (stageWinner === null) return;
-      const stage = this.views.get("0,0");
-      const color = cssToNum(TEAM_DEFS[stageWinner].color);
-      if (stage) {
-        this.setOwner(stage, stageWinner);
-        this.ring(stage.cx, stage.top, color, 260);
-        this.flash(stage.cx, stage.top - 20, lighten(color, 0.5));
-        this.particles.emit(stage.cx, stage.top - 20, color, { count: 60, speed: 340, life: 1.2, size: 0.4, up: 200 });
-      }
-      this.shake(20);
-      this.emit("stage", stageWinner);
-      this.fireworks = { color, until: this.t + dur * 0.36, next: this.t };
-    });
-    this.later(dur * 0.8, () => this.finishAnimation());
   }
 
   /** Celebration fireworks in a team's colour (results ceremony). */
@@ -601,13 +521,10 @@ export class MapRenderer {
     }
 
     for (const v of this.tickers) v.tick!(t, dt);
-    for (const v of this.chests) {
-      if (!v.chest) continue;
-      v.chest.y = -v.tile.height - 4 + Math.sin(t * 2.4 + v.cx) * 2.5;
-      if (Math.random() < dt * 0.9) this.particles.emit(v.cx + (Math.random() - 0.5) * 24, v.top - 12, 0xffe89a, { count: 1, speed: 20, life: 0.8, size: 0.14, gravity: -50 });
-    }
-    for (const v of this.swamps) {
-      if (Math.random() < dt * 0.5) this.particles.emit(v.cx + (Math.random() - 0.5) * 30, v.top + 2, 0x9fb86a, { count: 1, speed: 8, life: 1.1, size: 0.16, gravity: -26, grow: 1.8, alpha: 0.7 });
+    for (const v of this.tokens) {
+      if (!v.token) continue;
+      v.token.y = -v.tile.height - 4 + Math.sin(t * 2.4 + v.cx) * 3;
+      if (Math.random() < dt * 0.9) this.particles.emit(v.cx + (Math.random() - 0.5) * 24, v.top - 14, 0xffe89a, { count: 1, speed: 20, life: 0.8, size: 0.14, gravity: -50 });
     }
 
     this.ships.forEach((ship, i) => {
@@ -615,16 +532,13 @@ export class MapRenderer {
       if (this.shipMoving[i] && Math.random() < dt * 40) {
         this.particles.emit(ship.view.x + ship.kick.x, ship.view.y - 6, lighten(ship.color, 0.25), { count: 1, speed: 14, life: 0.7, size: 0.26, gravity: 0, grow: 0.1, alpha: 0.85 });
       }
-      if (this.fright[i] && Math.random() < dt * 5) {
-        this.particles.emit(ship.view.x + (Math.random() - 0.5) * 40, ship.view.y - 66, 0x9fdcff, { count: 1, speed: 10, life: 0.6, size: 0.2, gravity: 320, spread: 0.4, angle: Math.PI / 2 });
-      }
     });
 
     if (this.fireworks) {
       if (t > this.fireworks.until) this.fireworks = null;
       else if (t >= this.fireworks.next) {
         this.fireworks.next = t + 0.22 + Math.random() * 0.25;
-        const x = (Math.random() - 0.5) * 760, y = -160 - Math.random() * 260;
+        const x = (Math.random() - 0.5) * 560, y = -150 - Math.random() * 200;
         const c = Math.random() < 0.65 ? this.fireworks.color : [0xffffff, 0xffe27a, darken(this.fireworks.color, 0.2)][Math.floor(Math.random() * 3)];
         this.particles.emit(x, y, c, { count: this.lowFx ? 22 : 40, speed: 260, life: 1.1, size: 0.3, gravity: 140 });
         this.emit("firework");
@@ -637,7 +551,6 @@ export class MapRenderer {
     }
     this.particles.update(dt);
     this.clouds.update(dt, t);
-    this.spotlights.update(dt, t);
     this.updateCamera(dt);
   }
 

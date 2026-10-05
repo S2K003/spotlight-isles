@@ -1,9 +1,4 @@
-import {
-  FAIR_JUDGE_TOLERANCE,
-  SPOTLIGHT_MIN_MP,
-  SPOTLIGHT_MP,
-  SPOTLIGHT_TRIM_MIN_TEAMS,
-} from "@/config/balance";
+import { FAIR_JUDGE_TOLERANCE, SPOTLIGHT_TRIM_MIN_TEAMS } from "@/config/balance";
 import type { Rating, SpeakerResult } from "./types";
 
 const mean = (xs: number[]): number => xs.reduce((s, x) => s + x, 0) / xs.length;
@@ -14,9 +9,9 @@ export function clampStars(n: number): number {
 }
 
 /**
- * Section 6. Ratings are first averaged per rating team (so a big team has no more say than a
- * small one). When 5 or more teams rated, the teams with the highest and lowest overall average
- * are dropped before the room averages are taken.
+ * Ratings are first averaged per rating team (so a big team has no more say than a small one).
+ * When 5 or more teams rated, the teams with the highest and lowest overall average are dropped
+ * before the room averages are taken.
  */
 export function speakerResult(ratingsByTeam: Record<number, Rating[]>): SpeakerResult {
   const rows = Object.keys(ratingsByTeam)
@@ -47,26 +42,17 @@ export function speakerResult(ratingsByTeam: Record<number, Rating[]>): SpeakerR
   const hook = mean(kept.map((r) => r.hook));
   const clarity = mean(kept.map((r) => r.clarity));
   const confidence = mean(kept.map((r) => r.confidence));
-  return {
-    hook,
-    clarity,
-    confidence,
-    overall: (hook + clarity + confidence) / 3,
-    teamAverages,
-    raterTeams: rows.length,
-    trimmed,
-  };
+  return { hook, clarity, confidence, overall: (hook + clarity + confidence) / 3, teamAverages, raterTeams: rows.length, trimmed };
 }
 
-/** Speaking always earns at least 1 MP: courage is rewarded. */
-export function mpFromSpotlight(overall: number): number {
-  for (const band of SPOTLIGHT_MP) if (overall >= band.min) return band.mp;
-  return SPOTLIGHT_MIN_MP;
+/** Did this team rate at least one of the pitches? */
+export function didRate(results: SpeakerResult[], teamId: number): boolean {
+  return results.some((r) => r.teamAverages[teamId] !== undefined);
 }
 
 /**
- * Fair Judge: the team's average rating was within 0.5 of the room average for every speaker it
- * was allowed to rate (both speakers, for a non-speaking team), and it rated all of them.
+ * Fair Judge: the team rated every pitch that received ratings, and each time its average was
+ * within 0.5 stars of the room's.
  */
 export function isFairJudge(results: SpeakerResult[], teamId: number): boolean {
   const rated = results.filter((r) => r.overall !== null);
@@ -75,11 +61,4 @@ export function isFairJudge(results: SpeakerResult[], teamId: number): boolean {
     const mine = r.teamAverages[teamId];
     return mine !== undefined && Math.abs(mine - (r.overall as number)) <= FAIR_JUDGE_TOLERANCE + 1e-9;
   });
-}
-
-export function judgeDeviation(results: SpeakerResult[], teamId: number): number {
-  const devs = results
-    .filter((r) => r.overall !== null && r.teamAverages[teamId] !== undefined)
-    .map((r) => Math.abs(r.teamAverages[teamId] - (r.overall as number)));
-  return devs.length ? mean(devs) : 5;
 }

@@ -1,51 +1,55 @@
 # Decisions
 
-Choices made where the build spec was ambiguous or left room, following its rule: pick the simplest option that keeps the game fun and on time.
+## Version 2: the simplified game
 
-## Rules and scoring
+The first build followed [SPOTLIGHT_ISLES_BUILD_SPEC.md](SPOTLIGHT_ISLES_BUILD_SPEC.md) closely (12 rounds, territory painting, power cards, a Final Showdown). After review it was redesigned to be simpler, slower and built around team discussion. **The spec file describes version 1; this file and the README describe what the code does now.** What carried over unchanged: the 15:00 total, the lobby and joining flow, host-authoritative networking, reload/resume, Manual Mode, the renderer and the printable guide.
 
-- **Other teams' home tiles are impassable.** Homes can never be stolen, and they sit on the map's corners, so nothing needs to path through one.
-- **A ship that holds position always keeps its tile.** If another team targets a tile where a ship is standing still, the mover loses that clash whatever the round scores are, because the stationary ship has nowhere to bounce back to.
-- **Clash fallback.** After the 10-iteration cap, teams still in conflict return to their origin; this is repeated until no two ships share a tile (all ships at their origins is always valid).
-- **Ties.** Equal round scores in a clash or paint contest are broken by one seeded random draw per team per round. Tied votes are broken by the seeded RNG.
-- **The swamp penalty applies only when a ship *moves onto* a swamp.** A ship stuck there with 0 MP is not penalised again each round, which would be a death spiral.
-- **Heckler is not spent if you are the outright leader** (it would have no target). If you are tied for the lead it hits the other leader.
-- **Mic Drop still fires if you get bounced**; it claims the tiles around wherever you actually land.
-- **Card pickups and tie-breaks are drawn from a stream seeded per round**, so a reloaded host reproduces the same outcome.
-- **"Connected during the phase"** for team accuracy means connected when the phase ends, plus anyone who answered.
-- **Region wedges are centred on each team's home corner,** so every team starts in "its" criterion region. Each region has exactly 20 tiles. One starting chest is placed in each region (mid ring), so no team starts closer to treasure than another.
-- **Region Mastery needs a strict lead** (and at least 5 tiles). A tie for most tiles gives nobody the bonus. The plaza is not a region.
-- **The Keynote Stage tile is worth its 100 bonus** and is not also counted as a ×10 tile.
-- **Spotlight round scores** (used only for clashes that round): speakers use their star average × 200; audience teams use 400 + 100 for Fair Judge − 100 × their deviation from the room.
-- **Unrated speeches count as 3★** (2 MP). A featured team with nobody connected gets the 1 MP minimum.
-- **Fair Judge for a speaking team** is not awarded; they earn speaker MP instead. Their ratings of the *other* speaker still count toward that speaker's score and toward the individual Fair Judge award.
-- **Each speaker gets a different topic and twist,** and Speaker B's is only shown when their turn starts, so B gets no extra preparation time. Six twists, six speakers: each twist is used once.
-- **Final Showdown "most correct answers"** is measured as summed team accuracy over the three questions, so team size doesn't matter. Within a flood wave the lowest-scoring team claims first. If no team gets anything right, the Stage stays unclaimed.
-- **Rounds 10–12** take the three criteria with the lowest room accuracy so far, worst first, without repeating a criterion.
-- **Quick Draw award** prefers players with at least 3 correct answers, so one lucky fast tap can't win it.
-- **First answer locks in.** Votes and ratings can be changed until the phase ends (the latest one wins).
-- **Team switching** is allowed in the lobby only.
+| Asked for | What changed |
+|---|---|
+| Less complicated, clear to everyone | One goal (reach the Keynote Stage) and five rules. Removed: power cards, chests, swamps, territory scoring, region mastery, Quick Draw, Stage Fright, the Final Showdown, individual awards, ordering questions and pitch "twists". |
+| Mostly team discussion, room to breathe | Six rounds instead of twelve. 45 s to discuss a question, 30 s to prepare a pitch, 35 s to agree a move. No speed bonus. Answers can be changed until time runs out. Music drops while people talk. |
+| Challenges on the map, a tricky route to the destination | Each team's key is on the **opposite island**, so every crew has to cross the map and each other. Water blocks, fog costs double, and you can't land on another ship. |
+| Smaller map | Radius 4 (61 hexes) instead of radius 6 (127). |
+| Questions related to GSOE9010 | Eight scenarios about presenting research (pitching a project, a literature review, citing a figure on a slide, group presentations, handling a limitation in Q&A). Three are drawn per game. |
+| A mix of questions and team pitches rated by other teams, for movement | Rounds alternate question / pitch. The pitching team's star average becomes its steps; the audience earns steps by marking. Every team pitches exactly once. |
+| The team with the most points moves first | Ships move one at a time in score order. Moving first matters: you get the hex and the star. |
+| Fair and easy for all teams | The map is rotationally symmetric (identical for every team). Every team always moves at least 1 step. Last place gets +1 step. Team accuracy is a share, so team size doesn't matter. |
+
+## Rules decisions
+
+- **The game still lasts exactly 15:00.** The workshop slot is fixed, so the breathing room comes from having half as many rounds, not from an open-ended clock. Durations are in `config/timeline.ts`.
+- **Route length is fixed at 10–12 steps** (home → own key → Stage) on every generated map. Simulation showed that a nearby key let most ships finish in round 3 with nothing left to do, and that longer routes left most ships short. With this range nobody arrives before round 4 and typically four or five of six arrive by the end.
+- **"Most points moves first" uses the total score,** including the points just earned that round. Ties are broken by a seeded draw. Ships already at the Stage don't move.
+- **Blocking.** A ship can fly *through* a hex with another ship on it but can't *land* there; it stops one hex short. A ship that hasn't moved yet still blocks. Any number of ships can dock at the Stage.
+- **A wrong answer still moves 1 step** (but scores 0 points). Nobody is ever stuck.
+- **Tailwind:** the team or tied teams in last place among those still flying get +1 step, unless every team is level.
+- **Points:** 10 per step earned, 10 for your key, 10 per star, and 50 / 40 / 30 / 20 for reaching the Stage in arrival order. Docked teams keep earning points from questions and pitches.
+- **Keys are personal.** A team can only pick up its own key; other teams' keys are left where they are.
+- **You can't fly through the Stage** and out the other side. Arriving there ends the journey.
+- **Pitches are a team effort.** The team chooses its own speaker during the 30 s prep instead of the game picking a random person. The topic is shown on the pitching team's phones during prep and on the projector only when they speak.
+- **Audience steps:** didn't mark 1, marked 2, marked fairly (within 0.5★ of the room on every pitch) 3. Self-marking is blocked. With five or more teams marking, the highest and lowest team averages are dropped. An unrated pitch counts as 3★.
+- **The coloured trail** a ship leaves is decoration only.
+- **Questions avoid repeating a criterion** within a game where possible.
+
+## Course content
+
+I do not have the GSOE9010 course outline. The questions and pitch topics assume it is a research-skills course for engineering coursework students and that this workshop is about oral presentations, as described in the request. **Check `content/questions.ts` and `content/spotlight.ts` against the actual course material and rubric before the session.**
 
 ## Networking
 
-- **One broadcast event carries everything for a phase.** The spec lists separate `reveal`, `resolution`, `spotlight`, `results` and `debrief` events; their payloads travel inside `phase.publicData` instead, so a phone that joins or reconnects mid-phase gets the whole picture from a single message. `lobby`, `phase`, `tick`, `map` and `voteTally` are separate events as specified. The full map is resent after each resolution rather than diffs (it is about 9 KB).
-- **A `join` message** was added alongside `hello` so the host learns a player's name and team even if Presence is slow to sync; Presence remains the source of truth for who is connected. A host that reloads rebuilds its player list from Presence.
-- **Local mode.** With no Supabase keys the app uses the browser's BroadcastChannel so tabs in one browser can play together. This is for rehearsal, development and Manual Mode. The lobby shows a warning.
-- **The bot simulator uses one connection for all bots** (one Presence entry carrying the bot list), so 40 bots don't use 40 of the Supabase connection allowance. Bots know the question bank and answer correctly at a configurable rate (default 60%) so rehearsals produce realistic movement.
-- **Inputs are visible on the channel.** Supabase Broadcast delivers every message to every subscriber, so a determined player could read rivals' votes or answers with developer tools. The answer *key* never leaves the host before the Reveal. For a classroom game this was judged acceptable against the cost of running a server.
+- **One broadcast event carries everything for a phase** (`phase.publicData`), so a phone that joins or reconnects mid-phase gets the whole picture from one message. `lobby`, `phase`, `tick`, `map` and `voteTally` are separate events. Lobby updates are batched.
+- **Local mode.** With no Supabase keys the app uses the browser's BroadcastChannel so tabs in one browser can play together (rehearsal, development, Manual Mode).
+- **The bot simulator uses one connection for all bots.** Bots answer as teams, fly toward their key and then the Stage, and mark pitches.
+- **Inputs are visible on the channel.** Supabase Broadcast delivers every message to every subscriber, so a player with developer tools could read rivals' votes or answers. The answer key never leaves the host before the reveal.
+- **Either Supabase key name works:** `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or the older `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
 ## Screens
 
-- **Manual Mode destinations are picked on a map panel** on the host screen (the same mini-map the phones use) rather than by clicking the 3D map. It shows each team's reachable hexes and costs the same way phones do.
-- **Manual Mode accuracy bands can be set during the Challenge or the Reveal.** The answer is on screen during the Reveal, so the operator scores the show of hands then. Unset teams count as 50–79%.
-- **Manual Mode Final Showdown records each team's TRUE/FALSE answer,** not whether it was right, so the operator's clicks don't give the answer away on the projector.
-- **`/guide` has four sheets:** the two-page facilitator guide, plus the question bank (the "printed copy of the questions" backup) and the QR poster.
-- **Projector type sizes.** Questions are 46 px and primary text is 28 px or larger on the 1920×1080 canvas. A few secondary labels (scoreboard counts, hints) are 20–26 px. The HUD is laid out at 1920×1080 and scaled to the window, so 1280×720 shows the same layout.
-- **The Final Showdown "orbit"** is a slow sway and zoom of the map; the tiles are pre-drawn 2.5D so a true orbit isn't possible.
-- **Rehearsal speed** is any value up to 60 (`/host?speed=10`). Clocks on phones show real seconds remaining during a sped-up rehearsal.
-- **The team palette** differs from the spec's suggested hex values in exact shade (names and emblems are as specified). It was chosen by searching for the largest minimum pairwise difference under simulated protanopia, deuteranopia and tritanopia; `tests/colors.test.ts` enforces it.
-- **Sound** is fully synthesized, including the music loop, so there are no audio files to license.
-- **Low-effects fallback.** Bloom and water displacement switch off automatically if frames stay slow, or with `/host?fx=low`.
+- **Manual Mode** records a show of hands as None / A few / About half / Most, destinations on a map panel (teams listed in move order), and 1–5 stars per pitch.
+- **`/guide` has four sheets:** the two-page facilitator guide, the question bank and the QR poster.
+- **The HUD is laid out at 1920×1080 and scaled to the window.**
+- **The team palette** was chosen by searching for the largest minimum pairwise difference under simulated protanopia, deuteranopia and tritanopia; `tests/colors.test.ts` enforces it. Each team also has its own emblem shape.
+- **Sound** is fully synthesized. **Low-effects fallback:** bloom and water distortion switch off automatically if frames stay slow, or with `/host?fx=low`.
 
 ## Tooling
 

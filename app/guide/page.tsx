@@ -2,11 +2,12 @@
 
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
-import { CARD_INFO } from "@/config/balance";
-import { CRITERIA, LEARNING_OBJECTIVES, RUBRIC } from "@/config/rubric";
+import { POINTS } from "@/config/balance";
+import { LEARNING_OBJECTIVES, RUBRIC, SPOTLIGHT_CRITERIA } from "@/config/rubric";
 import { TEAM_DEFS } from "@/config/teams";
-import { FINAL_POOL, QUESTIONS } from "@/content/questions";
-import { SPOTLIGHT_TOPICS, SPOTLIGHT_TWISTS } from "@/content/spotlight";
+import { DUR } from "@/config/timeline";
+import { QUESTIONS } from "@/content/questions";
+import { SPOTLIGHT_TOPICS } from "@/content/spotlight";
 import { normalizeRoomCode } from "@/lib/engine/rng";
 import { formatClock, TIMELINE } from "@/lib/engine/timeline";
 
@@ -53,7 +54,7 @@ export default function GuidePage() {
       </div>
 
       {/* ---------- Page 1: plan, objectives, rules ---------- */}
-      <section className="sheet">
+      <section className="sheet" style={{ fontSize: "9.6pt", lineHeight: 1.34 }}>
         <div className="flex items-end justify-between border-b-4 border-[#151a2e] pb-1">
           <h1 className="text-[26pt] leading-none">SPOTLIGHT ISLES</h1>
           <div className="text-right text-[9pt] font-bold">
@@ -62,202 +63,190 @@ export default function GuidePage() {
           </div>
         </div>
         <p className="mt-2">
-          <strong>What it is.</strong> A 15-minute, 6-team, real-time strategy game played on phones with one projector screen. Each island region is a <strong>presentation marking criterion</strong>. Teams answer a presentation-skills challenge to earn movement, vote on where their airship flies, and paint territory. Three <strong>Spotlight rounds</strong> put two players on the spot for a live 20-second pitch, which every other team <strong>marks with a rubric</strong>. The game ends at exactly 15:00 with a data-driven debrief that feeds the Closing.
+          <strong>What it is.</strong> A 15-minute team game played on phones with one projector screen. Six teams race their airships from their home island to the <strong>Keynote Stage</strong> in the middle of a small map. Movement is earned by <strong>talking through presentation questions as a team</strong> and by giving a short <strong>team pitch that the other teams mark with a rubric</strong>. It is deliberately unhurried: most of the time is discussion.
         </p>
 
-        <h2 className="mt-2 text-[11pt]">Learning objectives</h2>
+        <h2 className="mt-3 text-[13pt]">Learning objectives</h2>
         <ol className="ml-5 list-decimal">
           {LEARNING_OBJECTIVES.map((o) => (
             <li key={o}>{o}</li>
           ))}
         </ol>
 
-        <div className="mt-2 grid grid-cols-2 gap-3">
+        <h2 className="mt-3 text-[13pt]">The rules (this is all of them)</h2>
+        <ol className="ml-5 list-decimal">
+          <li><strong>Goal:</strong> fly to your team&apos;s 🔑 key, then to the 🎤 Keynote Stage. Your key is on the <strong>opposite island</strong>, so every team crosses the map.</li>
+          <li><strong>Each round</strong> your team earns <strong>1–3 steps</strong>, then agrees where to fly (majority vote on phones).</li>
+          <li><strong>Ships move one at a time, most points first.</strong> You can&apos;t land on a hex another ship is on (you stop one short). Last place gets a 🌬️ tailwind: +1 step.</li>
+          <li><strong>The map:</strong> 🌊 water can&apos;t be crossed · ☁ fog costs 2 steps · ⭐ a star is worth {POINTS.star} points to the first team over it.</li>
+          <li><strong>Points:</strong> {POINTS.perStep} per step earned · {POINTS.key} for your key · reaching the Stage pays {POINTS.dock.slice(0, 4).join(" / ")} by arrival order. Most points wins.</li>
+        </ol>
+
+        <div className="mt-3 grid grid-cols-2 gap-4">
           <div>
-            <h2 className="text-[11pt]">Where it fits (50-minute workshop)</h2>
+            <h2 className="text-[13pt]">Question rounds (1, 3, 5)</h2>
+            <p>One scenario about presenting research. The team <strong>discusses for {DUR.challenge} seconds</strong> and everyone taps the answer they agreed on (it can be changed until time runs out).</p>
+            <table className="mt-1">
+              <thead><tr><th>Share of the team correct</th><th>Steps</th><th>Points</th></tr></thead>
+              <tbody>
+                <tr><td>80–100%</td><td>3</td><td>30</td></tr>
+                <tr><td>50–79%</td><td>2</td><td>20</td></tr>
+                <tr><td>1–49%</td><td>1</td><td>10</td></tr>
+                <tr><td>Nobody</td><td>1</td><td>0</td></tr>
+              </tbody>
+            </table>
+            <p className="mt-1">There is no speed bonus, and every team always moves at least 1. A team of 1 is as strong as a team of 8.</p>
+          </div>
+          <div>
+            <h2 className="text-[13pt]">Pitch rounds (2, 4, 6)</h2>
+            <p>Two teams get a topic and <strong>{DUR.spotReady} seconds to choose a speaker and plan</strong>. Each speaks for {DUR.spotSpeak} seconds. Everyone else gives 1–5 stars for <strong>{SPOTLIGHT_CRITERIA.map((c) => c.label).join(", ")}</strong>. Every team pitches exactly once.</p>
+            <table className="mt-1">
+              <thead><tr><th>Who</th><th>Steps</th></tr></thead>
+              <tbody>
+                <tr><td>Pitching team: 4★ or more</td><td>3</td></tr>
+                <tr><td>Pitching team: 3★ or more</td><td>2</td></tr>
+                <tr><td>Pitching team: below 3★</td><td>1</td></tr>
+                <tr><td>Audience team that marked fairly (within 0.5★ of the room)</td><td>3</td></tr>
+                <tr><td>Audience team that marked</td><td>2</td></tr>
+                <tr><td>Audience team that didn&apos;t mark</td><td>1</td></tr>
+              </tbody>
+            </table>
+            <p className="mt-1">Teams can&apos;t mark themselves. With 5+ teams marking, the highest and lowest are dropped.</p>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-4">
+          <div>
+            <h2 className="text-[13pt]">Where it fits (50-minute workshop)</h2>
             <table>
               <tbody>
                 <tr><th>0:00</th><td>Agenda (2 min) — show the QR so people join early</td></tr>
                 <tr><th>0:02</th><td>Activity One — Diagrams (15 min)</td></tr>
-                <tr><th>0:17</th><td>Activity Two — Elevator Pitch (15 min, prep cut to 10)</td></tr>
+                <tr><th>0:17</th><td>Activity Two — Elevator Pitch (15 min)</td></tr>
                 <tr><th>0:32</th><td><strong>Activity Three — SPOTLIGHT ISLES (15:00)</strong></td></tr>
                 <tr><th>0:47</th><td>Closing (3 min) — uses the debrief screen</td></tr>
               </tbody>
             </table>
-            <p className="mt-1 text-[7.8pt]">The lobby is open beforehand and does not count. The clock starts when the host presses START.</p>
+            <p className="mt-1">Seat each team together: the game only works if they can talk. The clock starts when the host presses START.</p>
           </div>
           <div>
-            <h2 className="text-[11pt]">The 15:00 itinerary</h2>
+            <h2 className="text-[13pt]">The 15:00 itinerary</h2>
             <table>
               <tbody>
-                <tr><th>00:00</th><td>Intro + how to play (40 s)</td></tr>
-                <tr><th>{at("r1-challenge")}</th><td>Rounds 1–2: Structure, Visuals</td></tr>
-                <tr><th>{at("r3-ready")}</th><td><strong>Round 3 SPOTLIGHT</strong> — Teams 1 &amp; 2</td></tr>
-                <tr><th>{at("r4-challenge")}</th><td>Rounds 4–5: Delivery, Engagement</td></tr>
-                <tr><th>{at("r6-ready")}</th><td><strong>Round 6 SPOTLIGHT</strong> — Teams 3 &amp; 4</td></tr>
-                <tr><th>{at("r7-challenge")}</th><td>Rounds 7–8: Timing, Q&amp;A</td></tr>
-                <tr><th>{at("r9-ready")}</th><td><strong>Round 9 SPOTLIGHT</strong> — Teams 5 &amp; 6</td></tr>
-                <tr><th>{at("r10-challenge")}</th><td>Rounds 10–12: the room&apos;s weakest criteria</td></tr>
-                <tr><th>{at("final-banner")}</th><td>Final Showdown: Keynote Stage (75 s)</td></tr>
-                <tr><th>{at("results")}</th><td>Results ceremony (60 s)</td></tr>
-                <tr><th>{at("debrief")}</th><td>Debrief (50 s) → GAME OVER at 15:00</td></tr>
+                <tr><th>00:00</th><td>Intro: the rules in three cards ({DUR.intro} s)</td></tr>
+                <tr><th>{at("r1-challenge")}</th><td>Round 1 — team question</td></tr>
+                <tr><th>{at("r2-ready")}</th><td><strong>Round 2 — pitches:</strong> Teams 1 &amp; 2</td></tr>
+                <tr><th>{at("r3-challenge")}</th><td>Round 3 — team question</td></tr>
+                <tr><th>{at("r4-ready")}</th><td><strong>Round 4 — pitches:</strong> Teams 3 &amp; 4</td></tr>
+                <tr><th>{at("r5-challenge")}</th><td>Round 5 — team question</td></tr>
+                <tr><th>{at("r6-ready")}</th><td><strong>Round 6 — pitches:</strong> Teams 5 &amp; 6</td></tr>
+                <tr><th>{at("results")}</th><td>Results and podium ({DUR.results} s)</td></tr>
+                <tr><th>{at("debrief")}</th><td>Debrief ({DUR.debrief} s) → GAME OVER at 15:00</td></tr>
               </tbody>
             </table>
+            <p className="mt-1">After every round: {DUR.vote} s to agree where to fly, then the ships move.</p>
           </div>
         </div>
 
-        <h2 className="mt-2 text-[11pt]">Rules in brief</h2>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p><strong>Standard round (46 s):</strong> Challenge 20 → Reveal 6 → Team Vote 12 → Move 8.</p>
-            <table className="mt-1">
-              <thead><tr><th>Team accuracy</th><th>Movement points</th></tr></thead>
-              <tbody>
-                <tr><td>0% (or nobody answered)</td><td>0 — STAGE FRIGHT</td></tr>
-                <tr><td>1–49%</td><td>1</td></tr>
-                <tr><td>50–79%</td><td>2</td></tr>
-                <tr><td>80–100%</td><td>3</td></tr>
-                <tr><td>Fastest team with ≥50%</td><td>+1 Quick Draw</td></tr>
-              </tbody>
-            </table>
-            <p className="mt-1">Accuracy = correct ÷ connected members, so a team of 1 is as strong as a team of 8. The team&apos;s <strong>majority vote</strong> picks the destination. Every hex crossed is painted. Two teams on the same hex = <strong>CLASH</strong>: the better round score wins it, the other stops one hex short.</p>
-            <p className="mt-1"><strong>Score</strong> = tiles × 10 + 50 per region mastered (most tiles, min. 5) + 100 for the Keynote Stage.</p>
-          </div>
-          <div>
-            <p><strong>Spotlight round (87 s):</strong> Ready 5 → Speaker A 20 → Rate 8 → Speaker B 20 → Rate 8 → Scorecards 6 → Vote 12 → Move 8.</p>
-            <p className="mt-1">Raters give 1–5 stars for <strong>Hook, Clarity, Confidence</strong>. No self-team rating; with 5+ teams rating, the highest and lowest team averages are dropped. Speakers earn 1–4 MP (≥4.2 → 4, ≥3.5 → 3, ≥2.5 → 2, else 1). Other teams get 2 MP, +1 <strong>Fair Judge</strong> if within 0.5 of the room average for both speakers.</p>
-            <table className="mt-1">
-              <thead><tr><th>Tile / card</th><th>Effect</th></tr></thead>
-              <tbody>
-                <tr><td>Filler-Word Fog ☁</td><td>Costs 2 MP to enter</td></tr>
-                <tr><td>Death-by-PowerPoint Swamp</td><td>End here: −1 MP next round</td></tr>
-                <tr><td>Water / other homes</td><td>Impassable</td></tr>
-                <tr><td>Treasure chest 🎁</td><td>Land here: one power card (hold 2)</td></tr>
-                {Object.values(CARD_INFO).map((c) => (
-                  <tr key={c.name}><td>{c.icon} {c.name}</td><td>{c.text}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <h2 className="mt-2 text-[11pt]">The map: six regions, six criteria, six teams</h2>
-        <table>
-          <thead><tr><th>Region</th><th>Criterion</th><th>What the questions teach</th><th>Home team</th></tr></thead>
-          <tbody>
-            {CRITERIA.map((c, i) => (
-              <tr key={c}>
-                <td>{RUBRIC[c].icon} {RUBRIC[c].region}</td>
-                <td><strong>{RUBRIC[c].label}</strong></td>
-                <td>{RUBRIC[c].blurb}</td>
-                <td>{TEAM_DEFS[i].emblem} {TEAM_DEFS[i].name}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="mt-1 text-[7.8pt]">Teams are identified by colour <em>and</em> emblem shape. Rename the six teams to the real project-group names in the lobby (click a name).</p>
+        <p className="mt-3">
+          <strong>Teams:</strong> {TEAM_DEFS.map((t) => `${t.emblem} ${t.name}`).join(" · ")}. Each has its own colour <em>and</em> emblem shape. Rename them to the real project-group names in the lobby (click a name). The map is the same shape for every team, so nobody starts with an advantage.
+        </p>
       </section>
 
       {/* ---------- Page 2: roles, run sheet, checklist ---------- */}
-      <section className="sheet">
+      <section className="sheet" style={{ fontSize: "9.4pt", lineHeight: 1.32 }}>
         <div className="flex items-end justify-between border-b-4 border-[#151a2e] pb-1">
           <h1 className="text-[20pt] leading-none">Run sheet</h1>
           <div className="text-right text-[9pt] font-bold">Facilitator Guide · page 2 of 2</div>
         </div>
 
-        <h2 className="mt-2 text-[11pt]">Roles (4 facilitators)</h2>
+        <h2 className="mt-3 text-[13pt]">Roles (4 facilitators)</h2>
         <table>
           <thead><tr><th>Role</th><th>Job</th></tr></thead>
           <tbody>
-            <tr><td><strong>Game Master (MC)</strong></td><td>On the mic: narrates, builds hype, reads every challenge aloud (accessibility), hosts the Spotlight moments, leads the debrief.</td></tr>
-            <tr><td><strong>Tech Operator</strong></td><td>Runs <code>/host</code> on the projector laptop, watches connections, handles reconnects, ready to switch to Manual Mode.</td></tr>
-            <tr><td><strong>Floor Coach A</strong></td><td>Teams 1–3: helps people join, pushes discussion during votes, cheers the speakers.</td></tr>
+            <tr><td><strong>Game Master (MC)</strong></td><td>On the mic: explains the three rules, reads every question aloud, introduces each pitch, leads the debrief.</td></tr>
+            <tr><td><strong>Tech Operator</strong></td><td>Runs <code>/host</code> on the projector laptop, watches connections, ready to switch to Manual Mode.</td></tr>
+            <tr><td><strong>Floor Coach A</strong></td><td>Teams 1–3: helps people join, gets quiet members talking, helps pitching teams choose a speaker.</td></tr>
             <tr><td><strong>Floor Coach B</strong></td><td>Teams 4–6: same as Coach A.</td></tr>
           </tbody>
         </table>
 
-        <h2 className="mt-2 text-[11pt]">Live script (key cues)</h2>
+        <h2 className="mt-3 text-[13pt]">Live script (key cues)</h2>
         <table>
-          <thead><tr><th style={{ width: "13%" }}>Clock</th><th style={{ width: "11%" }}>Who</th><th>Cue</th></tr></thead>
+          <thead><tr><th style={{ width: "15%" }}>When</th><th style={{ width: "11%" }}>Who</th><th>Cue</th></tr></thead>
           <tbody>
-            <tr><td>Before START</td><td>Coaches</td><td>&ldquo;Scan the QR on the screen, pick your project group&apos;s team, and wait on the cloud.&rdquo;</td></tr>
-            <tr><td>00:00</td><td>MC</td><td>&ldquo;Welcome to Spotlight Isles! Every region is a presentation marking criterion. Win challenges to move further, and your team votes on where to go. We finish at exactly 15:00.&rdquo;</td></tr>
-            <tr><td>Each Challenge</td><td>MC</td><td>Reads the question aloud and counts down the last 5 seconds.</td></tr>
-            <tr><td>Each Vote</td><td>Coaches</td><td>&ldquo;Talk to your team, decide fast, tap together!&rdquo;</td></tr>
-            <tr><td>Each Move</td><td>MC</td><td>Sports-caster commentary: &ldquo;TIDE and EMBER are going for the same tile… CLASH!&rdquo;</td></tr>
-            <tr><td>{at("r3-ready")}, {at("r6-ready")}, {at("r9-ready")}</td><td>MC</td><td>&ldquo;Lights up on… [name]! Twenty seconds, make us care!&rdquo; Lead applause after each speaker. &ldquo;Mark them fairly: Hook, Clarity, Confidence.&rdquo;</td></tr>
-            <tr><td>{at("final-banner")}</td><td>MC</td><td>&ldquo;Night falls… FINAL SHOWDOWN for the Keynote Stage!&rdquo;</td></tr>
-            <tr><td>{at("results")}</td><td>MC</td><td>Hype the podium and read the four award winners.</td></tr>
-            <tr><td>{at("debrief")}</td><td>MC</td><td>Read the strongest and weakest skill from the debrief and link them to the objectives.</td></tr>
-            <tr><td>15:00</td><td>MC</td><td>&ldquo;Game over! Now, in one sentence: what&apos;s one thing you learned today?&rdquo; → into the Closing.</td></tr>
+            <tr><td>Before START</td><td>Coaches</td><td>&ldquo;Scan the QR, pick your project group&apos;s team, and sit together.&rdquo;</td></tr>
+            <tr><td>00:00</td><td>MC</td><td>&ldquo;Welcome to Spotlight Isles! Find your key on the far island, then race to the Keynote Stage. You earn steps by talking through questions and by pitching. Most points moves first.&rdquo;</td></tr>
+            <tr><td>Question rounds</td><td>MC</td><td>Read the question aloud. &ldquo;You have 45 seconds. Talk first, tap second. Agree on one answer.&rdquo;</td></tr>
+            <tr><td>Question rounds</td><td>Coaches</td><td>Ask a quiet member: &ldquo;Which one would you pick, and why?&rdquo;</td></tr>
+            <tr><td>Each reveal</td><td>MC</td><td>Read the &ldquo;why&rdquo; line. It is the teaching point of the round.</td></tr>
+            <tr><td>Each vote</td><td>Coaches</td><td>&ldquo;Have you got your key yet? Who moves before you? Agree, then tap together.&rdquo;</td></tr>
+            <tr><td>Each move</td><td>MC</td><td>Commentate: &ldquo;Tide moves first… Ember was heading for the same hex and gets bumped!&rdquo;</td></tr>
+            <tr><td>{at("r2-ready")}, {at("r4-ready")}, {at("r6-ready")}</td><td>MC</td><td>&ldquo;Pitch round! [Team A] and [Team B], your topic is on your phones. Thirty seconds: choose a speaker and plan a hook, one clear message and a confident finish.&rdquo; Lead applause after each pitch. &ldquo;Everyone else, mark fairly.&rdquo;</td></tr>
+            <tr><td>{at("results")}</td><td>MC</td><td>Hype the podium and the Best Pitch award.</td></tr>
+            <tr><td>{at("debrief")}</td><td>MC</td><td>Point to the hardest question and the pitch skill to work on. Link them to the objectives.</td></tr>
+            <tr><td>15:00</td><td>MC</td><td>&ldquo;Game over! In one sentence: what&apos;s one thing you learned today?&rdquo; → into the Closing.</td></tr>
           </tbody>
         </table>
 
-        <div className="mt-2 grid grid-cols-2 gap-3">
+        <div className="mt-3 grid grid-cols-2 gap-4">
           <div>
-            <h2 className="text-[11pt]">Checklist</h2>
+            <h2 className="text-[13pt]">Checklist</h2>
             <ul className="ml-4 list-disc">
-              <li><strong>1 week before:</strong> deploy; run a full bot rehearsal (<code>/dev/bots</code>).</li>
-              <li><strong>3 days before:</strong> rehearse with all 4 facilitators on phones; practise the script; time it.</li>
+              <li><strong>1 week before:</strong> deploy; run a bot rehearsal (<code>/dev/bots</code>).</li>
+              <li><strong>3 days before:</strong> rehearse with all 4 facilitators on phones; practise the script.</li>
               <li><strong>1 day before:</strong> full 15-minute dry run; print the QR poster (one per table); export this guide as a PDF.</li>
               <li><strong>On the day (15 min early):</strong> test Wi-Fi with several phones; laptop on charge, sleep off, notifications off; projector at 1080p; sound check; open the lobby during the Agenda.</li>
-              <li><strong>During:</strong> keep the host tab visible and in front. If it reloads, it resumes on the same clock.</li>
+              <li><strong>During:</strong> keep the host tab visible and in front. If it reloads, it resumes on the same clock. Emergency pause: long-press the clock.</li>
             </ul>
           </div>
           <div>
-            <h2 className="text-[11pt]">If the Wi-Fi fails: Manual Mode</h2>
+            <h2 className="text-[13pt]">If the Wi-Fi fails: Manual Mode</h2>
             <ol className="ml-4 list-decimal">
-              <li>Tick <strong>Manual Mode</strong> in the lobby (or keep playing; it can be switched on before START).</li>
-              <li>MC reads each question; teams answer by <strong>show of hands</strong>.</li>
-              <li>Operator clicks each team&apos;s accuracy band (0 / 1–49 / 50–79 / 80+) and the ⚡ Quick Draw team.</li>
-              <li>In the vote, pick each team and click its destination on the map panel.</li>
-              <li>Spotlight: a volunteer speaks; click 1–5 stars from the room&apos;s applause.</li>
-              <li>Final: click TRUE/FALSE for each team&apos;s hands.</li>
+              <li>Tick <strong>Manual Mode</strong> in the lobby before START.</li>
+              <li>MC reads each question; teams discuss, then answer by <strong>show of hands</strong>.</li>
+              <li>When the answer shows, the operator clicks how much of each team got it: None / A few / About half / Most.</li>
+              <li>In the vote, click each team (they are listed in move order) and then its destination on the map panel.</li>
+              <li>Pitches: click 1–5 stars from the room&apos;s applause.</li>
             </ol>
-            <p className="mt-1 text-[7.8pt]">Other backups: a facilitator hotspot for the laptop; the printed question bank (next page). Emergency pause: long-press the clock.</p>
+            <p className="mt-1">Other backups: a facilitator hotspot for the laptop; the printed question bank (next page).</p>
           </div>
         </div>
 
-        <h2 className="mt-2 text-[11pt]">Spotlight prompts</h2>
-        <p><strong>Topics:</strong> {SPOTLIGHT_TOPICS.join(" · ")}</p>
-        <p className="mt-1"><strong>Twists:</strong> {SPOTLIGHT_TWISTS.join(" · ")}</p>
+        <h2 className="mt-3 text-[13pt]">Pitch topics (each team gets a different one)</h2>
+        <ol className="ml-5 list-decimal columns-2 gap-6">
+          {SPOTLIGHT_TOPICS.map((t) => (
+            <li key={t}>{t}</li>
+          ))}
+        </ol>
 
-        <h2 className="mt-2 text-[11pt]">Debrief → Closing</h2>
-        <p>The final screen shows a radar of room-wide accuracy per criterion, the Spotlight averages, the strongest skill, the skill to work on, and three takeaways taken from the questions the room got most wrong. Ask: <em>&ldquo;Tell us one thing you learned, or something you liked about today.&rdquo;</em></p>
-        <p className="mt-1 text-[7.8pt]">Privacy: only nicknames are collected and nothing is stored after the session.</p>
+        <h2 className="mt-3 text-[13pt]">Debrief → Closing</h2>
+        <p>The final screen shows how the room did on each question (hardest first), the room&apos;s average stars for Hook, Clarity and Confidence, the pitch skill to work on, and three takeaways. Ask: <em>&ldquo;Tell us one thing you learned, or something you liked about today.&rdquo;</em></p>
+        <p className="mt-1">Privacy: only nicknames are collected and nothing is stored after the session.</p>
       </section>
 
       {/* ---------- Extra: question bank (printed backup) ---------- */}
-      <section className="sheet" style={{ fontSize: "7.5pt", lineHeight: 1.2 }}>
+      <section className="sheet" style={{ fontSize: "9.2pt", lineHeight: 1.3 }}>
         <div className="flex items-end justify-between border-b-4 border-[#151a2e] pb-1">
-          <h1 className="text-[18pt] leading-none">Question bank (mapped to criteria)</h1>
-          <div className="text-right text-[9pt] font-bold">Printed backup · ✔ = correct answer</div>
+          <h1 className="text-[18pt] leading-none">Question bank</h1>
+          <div className="text-right text-[9pt] font-bold">Printed backup · three are drawn per game · ✔ = best answer</div>
         </div>
-        <div className="mt-2 columns-2 gap-4">
-          {CRITERIA.map((c) => (
-            <div key={c} className="mb-2 break-inside-avoid-column">
-              <h3 className="text-[11pt]">{RUBRIC[c].icon} {RUBRIC[c].label}</h3>
-              {QUESTIONS.filter((q) => q.criterion === c).map((q) => (
-                <div key={q.id} className="mb-1 break-inside-avoid">
-                  <strong>{q.id}.</strong> {q.prompt} {q.slide ? <em>(shown with a mock slide: “{q.slide.title}”)</em> : null}
-                  {q.type === "order" ? (
-                    <div>✔ Order: {q.options.map((o, i) => `(${i + 1}) ${o}`).join(" → ")}</div>
-                  ) : (
-                    <div>{q.options.map((o, i) => <span key={i}>{i === q.correct ? <strong>✔ {o}</strong> : o}{i < q.options.length - 1 ? " · " : ""}</span>)}</div>
-                  )}
-                  <div><em>Why: {q.why}</em></div>
-                </div>
-              ))}
+        <p className="mt-2">Scenarios about presenting research, written for GSOE9010. Each is a judgement call for the team to talk through. Edit them in <code>content/questions.ts</code>.</p>
+        <div className="mt-2 columns-2 gap-5">
+          {QUESTIONS.map((q) => (
+            <div key={q.id} className="mb-3 break-inside-avoid">
+              <div>
+                <strong>{q.id}</strong> <span className="text-[8pt] uppercase tracking-wider text-gray-600">{RUBRIC[q.criterion].label}</span>
+              </div>
+              <div className="font-bold">{q.prompt} {q.slide ? <em className="font-normal">(shown with a text-heavy mock slide)</em> : null}</div>
+              <ul className="ml-4 list-disc">
+                {q.options.map((o, i) => (
+                  <li key={i}>{i === q.correct ? <strong>✔ {o}</strong> : o}</li>
+                ))}
+              </ul>
+              <div><em>Why: {q.why}</em></div>
             </div>
           ))}
-          <div className="break-inside-avoid-column">
-            <h3 className="text-[11pt]">🌙 Final Showdown (true / false, 3 drawn at random)</h3>
-            {FINAL_POOL.map((q) => (
-              <div key={q.id} className="mb-0.5">
-                <strong>{q.id}.</strong> {q.statement} → <strong>{q.answer ? "True" : "False"}</strong>. <em>{q.why}</em>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -276,12 +265,12 @@ export default function GuidePage() {
         ) : (
           <p className="mt-3 text-[14pt] font-bold">and enter the 4-letter code shown on the big screen</p>
         )}
-        <div className="mt-auto flex gap-5 pb-4 text-[11pt] font-extrabold">
+        <div className="mt-auto flex gap-5 pb-4 text-[13pt] font-extrabold">
           {TEAM_DEFS.map((t) => (
             <span key={t.id}>{t.emblem} {t.name}</span>
           ))}
         </div>
-        <p className="pb-2 text-[10pt]">1. Scan · 2. Type a nickname · 3. Pick your project group&apos;s team · 4. Wait for START</p>
+        <p className="pb-2 text-[10pt]">1. Scan · 2. Type a nickname · 3. Pick your project group&apos;s team · 4. Sit together and wait for START</p>
       </section>
     </div>
   );

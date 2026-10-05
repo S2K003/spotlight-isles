@@ -1,6 +1,16 @@
 # Spotlight Isles
 
-A 15-minute, 6-team, real-time multiplayer strategy game about presentation skills, built for the GSOE9010 Week 5 Presentation Skills (FC4) workshop. Players join on their phones; one projector screen runs the game.
+A 15-minute, 6-team game about presentation skills, built for the GSOE9010 Week 5 Presentation Skills (FC4) workshop. Players join on their phones; one projector screen runs the game. It is mostly team discussion: talk through a question or prepare a pitch, then decide together where to fly.
+
+## How to play
+
+1. **Goal:** fly your airship to your team's 🔑 key, then to the 🎤 Keynote Stage in the middle. Your key is on the opposite island.
+2. **Each round** your team earns 1–3 steps, then agrees where to fly.
+   - *Question rounds (1, 3, 5):* discuss a scenario about presenting research for 45 seconds and tap the answer you agree on. The bigger the share of your team that is right, the more steps.
+   - *Pitch rounds (2, 4, 6):* two teams get 30 seconds to choose a speaker and plan, then pitch for 25 seconds each. The other teams mark Hook, Clarity and Confidence. Good pitches earn steps; so does marking fairly. Every team pitches once.
+3. **Ships move one at a time, most points first.** You can't land on another ship. Last place gets one extra step.
+4. **The map:** water blocks, fog costs 2 steps, a ⭐ is worth 10 points to the first team over it.
+5. **Most points wins.** Points come from steps earned, your key, stars, and reaching the Stage early (50 / 40 / 30 / 20).
 
 - `/` — landing page: join with a 4-letter code, or host
 - `/host` — projector screen (lobby → game → results → debrief). Runs the game engine.
@@ -8,7 +18,7 @@ A 15-minute, 6-team, real-time multiplayer strategy game about presentation skil
 - `/guide` — printable facilitator guide, question bank and QR poster
 - `/dev/bots?count=40&code=CODE` — bot simulator for rehearsals
 
-The full design is in [SPOTLIGHT_ISLES_BUILD_SPEC.md](SPOTLIGHT_ISLES_BUILD_SPEC.md). Choices made where the spec was open are in [DECISIONS.md](DECISIONS.md).
+[DECISIONS.md](DECISIONS.md) explains the design choices. [SPOTLIGHT_ISLES_BUILD_SPEC.md](SPOTLIGHT_ISLES_BUILD_SPEC.md) is the original, more complex design (version 1); the game was simplified after review, so where they differ, this README and DECISIONS.md are correct.
 
 ## Deploy to Vercel (about 10 minutes)
 
@@ -71,7 +81,7 @@ npm run dev                  # http://localhost:3000
 |---|---|
 | `npm run dev` | Development server |
 | `npm run build` / `npm start` | Production build and server |
-| `npm test` | Engine unit tests (timeline = 900,000 ms, map, every rule, full-game simulations, colour-blind palette check) |
+| `npm test` | Engine unit tests (timeline = 900,000 ms, fair symmetric map, every rule, full-game simulations, colour-blind palette check) |
 | `npm run smoke` | End-to-end rehearsal in headless Edge: full game with 40 bots + a phone, host reload, Manual Mode (run `npm run build` first) |
 
 ## Running the session
@@ -96,9 +106,9 @@ Print `/guide?code=CODE` (Print → Save as PDF, A4, margins none, background gr
 | Region / criterion names (to match the official rubric) | `config/rubric.ts` |
 | Team names, colours, emblems | `config/teams.ts` (run `npm test`: it checks the colours stay colour-blind safe) |
 | Phase durations and round order | `config/timeline.ts` (a test fails if the total is not exactly 900 s) |
-| Movement points, card odds, tile mix, scoring | `config/balance.ts` |
-| Questions and explanations | `content/questions.ts` |
-| Spotlight topics, twists, waiting-room tips | `content/spotlight.ts` |
+| Steps, points, map size, obstacles per island | `config/balance.ts` |
+| Questions and explanations (check these against the course material) | `content/questions.ts` |
+| Pitch topics and waiting-room tips | `content/spotlight.ts` |
 
 ## How it works
 

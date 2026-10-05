@@ -14,14 +14,15 @@ export interface MoveRules {
   teamId: TeamId;
   /** Home tile key → owning team. Another team's home is impassable. */
   homes: Record<string, TeamId>;
+  /** The Keynote Stage can only be entered by a team holding a key. */
   allowStage?: boolean;
 }
 
-/** Movement cost to ENTER a tile, or Infinity if it can't be entered. */
+/** Steps needed to ENTER a tile, or Infinity if it can't be entered. */
 export function enterCost(tile: Tile | undefined, rules: MoveRules): number {
   if (!tile) return Infinity;
   if (tile.type === "water") return Infinity;
-  if (tile.type === "stage") return rules.allowStage ? 1 : Infinity;
+  if (tile.type === "stage") return rules.allowStage ? TILE_COST.stage : Infinity;
   const homeOf = rules.homes[`${tile.q},${tile.r}`];
   if (homeOf !== undefined && homeOf !== rules.teamId) return Infinity;
   return TILE_COST[tile.type];
@@ -37,6 +38,7 @@ interface Node {
  * Dijkstra from `from`, limited to `maxCost`. Deterministic: nodes are expanded by
  * (cost, discovery order) and neighbours are visited in the fixed DIRS order, and a node's
  * predecessor only changes on a strictly cheaper route. Every client therefore gets the same path.
+ * Nothing is expanded beyond the Stage: arriving there ends the journey.
  */
 export function search(index: TileIndex, from: Hex, maxCost: number, rules: MoveRules): Record<string, Node> {
   const nodes: Record<string, Node> = {};
@@ -55,6 +57,7 @@ export function search(index: TileIndex, from: Hex, maxCost: number, rules: Move
     const curKey = open.splice(bi, 1)[0];
     if (done[curKey]) continue;
     done[curKey] = true;
+    if (index[curKey]?.type === "stage") continue;
     const cur = parseKey(curKey);
     const curCost = nodes[curKey].cost;
     for (const d of DIRS) {
@@ -76,19 +79,19 @@ export function search(index: TileIndex, from: Hex, maxCost: number, rules: Move
   return nodes;
 }
 
-/** Every hex the team can reach with `mp` movement points (excluding where it already is). */
-export function reachable(index: TileIndex, from: Hex, mp: number, rules: MoveRules): ReachItem[] {
-  if (mp <= 0) return [];
-  const nodes = search(index, from, mp, rules);
+/** Every hex the team can reach with `steps` (excluding where it already is). */
+export function reachable(index: TileIndex, from: Hex, steps: number, rules: MoveRules): ReachItem[] {
+  if (steps <= 0) return [];
+  const nodes = search(index, from, steps, rules);
   const start = key(from);
   return Object.keys(nodes)
     .filter((k) => k !== start)
     .map((k) => ({ key: k, cost: nodes[k].cost }));
 }
 
-/** Shortest path from `from` to `to` within `mp`, origin first; null if unreachable. */
-export function shortestPath(index: TileIndex, from: Hex, to: Hex, mp: number, rules: MoveRules): Hex[] | null {
-  const nodes = search(index, from, mp, rules);
+/** Shortest path from `from` to `to` within `steps`, origin first; null if unreachable. */
+export function shortestPath(index: TileIndex, from: Hex, to: Hex, steps: number, rules: MoveRules): Hex[] | null {
+  const nodes = search(index, from, steps, rules);
   const target = key(to);
   if (!nodes[target]) return null;
   const path: Hex[] = [];
@@ -98,6 +101,11 @@ export function shortestPath(index: TileIndex, from: Hex, to: Hex, mp: number, r
     k = nodes[k].prev;
   }
   return path.reverse();
+}
+
+/** Cheapest cost from `from` to `to`, or Infinity. */
+export function costTo(index: TileIndex, from: Hex, to: Hex, rules: MoveRules): number {
+  return search(index, from, 99, rules)[key(to)]?.cost ?? Infinity;
 }
 
 export function homesOf(teams: { id: TeamId; home: Hex }[]): Record<string, TeamId> {

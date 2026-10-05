@@ -3,33 +3,31 @@
 import confetti from "canvas-confetti";
 import { motion, MotionConfig } from "motion/react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { CARD_INFO } from "@/config/balance";
-import { RUBRIC, SPOTLIGHT_CRITERIA } from "@/config/rubric";
+import { SPOTLIGHT_CRITERIA } from "@/config/rubric";
 import { TEAM_DEFS } from "@/config/teams";
+import { PITCH_RECIPE } from "@/content/spotlight";
 import { Airship, Emblem } from "@/components/shared/Emblem";
 import { useRemaining } from "@/components/shared/useCountdown";
 import { formatClock } from "@/lib/engine/timeline";
-import type { CardId, PhaseKind, PublicData, SpeakerResult, TeamId } from "@/lib/engine/types";
+import type { PhaseKind, PublicData, SpeakerResult, TeamId } from "@/lib/engine/types";
 import { GameClient, type ClientView } from "@/lib/net/client";
-import { AnswerPad, CardRow, LockedIn, OrderPad, RatingStars } from "./Inputs";
+import { AnswerPad, LockedIn, RatingStars } from "./Inputs";
 import { Join, Waiting } from "./Lobby";
 import { VoteMap } from "./VoteMap";
+
+const ORDINAL = ["1st", "2nd", "3rd", "4th", "5th", "6th"];
 
 const PHASE_TITLE: Record<PhaseKind | "lobby", string> = {
   lobby: "Lobby",
   intro: "Get ready",
-  challenge: "Challenge",
+  challenge: "Team question",
   reveal: "Answer",
-  vote: "Team vote",
+  vote: "Where to?",
   resolve: "Ships moving",
-  spotReady: "Spotlight",
-  spotSpeak: "Spotlight",
-  spotRate: "Rate the pitch",
-  spotReveal: "Scorecard",
-  finalBanner: "Final Showdown",
-  finalQ: "Final Showdown",
-  finalReveal: "Final Showdown",
-  finalFlood: "Final Showdown",
+  spotReady: "Pitch prep",
+  spotSpeak: "Live pitch",
+  spotRate: "Mark the pitch",
+  spotReveal: "Scorecards",
   results: "Results",
   debrief: "Debrief",
   over: "Game over",
@@ -133,11 +131,7 @@ function Play({ client, code }: { client: GameClient; code: string }) {
     <MotionConfig reducedMotion={reduce ? "always" : "user"}>
       <main className={`relative min-h-dvh bg-gradient-to-b from-[#1a1f4d] via-[#0f1434] to-[#0b1026] ${reduce ? "reduce-motion" : ""}`}>
         {body}
-        <button
-          onClick={toggleReduce}
-          className="fixed bottom-1.5 right-2 z-50 rounded-full bg-black/40 px-2.5 py-1 text-[11px] font-bold text-white/60"
-          aria-pressed={reduce}
-        >
+        <button onClick={toggleReduce} className="fixed bottom-1.5 right-2 z-50 rounded-full bg-black/40 px-2.5 py-1 text-[11px] font-bold text-white/60" aria-pressed={reduce}>
           {reduce ? "Motion: reduced" : "Reduce motion"}
         </button>
       </main>
@@ -159,7 +153,7 @@ function Ring({ view }: { view: ClientView }) {
     <div className="relative h-14 w-14 shrink-0">
       <svg viewBox="0 0 56 56" className="h-14 w-14 -rotate-90">
         <circle cx="28" cy="28" r={R} fill="rgba(0,0,0,0.35)" stroke="rgba(255,255,255,0.18)" strokeWidth="5" />
-        <circle cx="28" cy="28" r={R} fill="none" stroke={frac < 0.25 ? "#ef4444" : "#ffd54a"} strokeWidth="5" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - frac)} />
+        <circle cx="28" cy="28" r={R} fill="none" stroke={frac < 0.2 ? "#ef4444" : "#ffd54a"} strokeWidth="5" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - frac)} />
       </svg>
       <span className="absolute inset-0 grid place-items-center font-display text-xl">{view.paused ? "❚❚" : secs}</span>
     </div>
@@ -183,14 +177,14 @@ function Game({ client, view, reduce }: { client: GameClient; view: ClientView; 
     <div className="mx-auto flex min-h-dvh max-w-md flex-col">
       <header className="sticky top-0 z-20 flex items-center gap-2.5 px-3 py-2 shadow-lg" style={{ background: `linear-gradient(180deg, ${def.color}, ${def.color}cc)` }}>
         <Emblem teamId={teamId} size={38} />
-        <div className="min-w-0 flex-1 leading-tight text-[#0b1026]">
+        <div className="min-w-0 flex-1 leading-tight" style={{ color: teamId === 4 || teamId === 1 || teamId === 3 ? "#fff" : "#0b1026" }}>
           <div className="truncate font-display text-xl">{team?.name ?? def.name}</div>
-          <div className="truncate text-xs font-extrabold opacity-75">
-            {view.me.name} · {team?.score ?? 0} pts · <GlobalClock view={view} />
+          <div className="truncate text-xs font-extrabold opacity-80">
+            {team?.score ?? 0} pts · {team?.docked !== null ? "🎤 at the Stage" : team?.hasKey ? "🔑 ✓" : "needs 🔑"} · <GlobalClock view={view} />
           </div>
         </div>
-        <div className="text-right leading-tight text-[#0b1026]">
-          <div className="text-[11px] font-extrabold uppercase tracking-wider opacity-75">{data.round > 0 && data.round <= data.totalRounds ? `Round ${data.round}/${data.totalRounds}` : " "}</div>
+        <div className="text-right leading-tight" style={{ color: teamId === 4 || teamId === 1 || teamId === 3 ? "#fff" : "#0b1026" }}>
+          <div className="text-[11px] font-extrabold uppercase tracking-wider opacity-80">{data.round > 0 ? `Round ${data.round}/${data.totalRounds}` : " "}</div>
           <div className="font-display text-lg">{PHASE_TITLE[phase.kind]}</div>
         </div>
         <Ring view={view} />
@@ -213,49 +207,44 @@ function BigScreen({ teamId, text = "👀 Look at the big screen!", sub }: { tea
         <Airship teamId={teamId} size={150} />
       </div>
       <p className="mt-4 font-display text-3xl">{text}</p>
-      {sub && <p className="mt-2 text-base font-bold text-white/70">{sub}</p>}
+      {sub && <p className="mt-2 text-base font-bold text-white/75">{sub}</p>}
     </div>
   );
 }
 
-function MpLine({ data, teamId }: { data: PublicData; teamId: TeamId }) {
+/** What my team earned this round and where we are in the move order. */
+function Earned({ data, teamId }: { data: PublicData; teamId: TeamId }) {
   const r = data.teamResults?.[teamId];
+  const team = data.teams[teamId];
   if (!r) return null;
-  const mods = r.mods.map((m) => (m.kind === "hook" ? "🪝 +1" : m.kind === "swamp" ? "🫧 −1" : "📢 −1")).join("  ");
+  if (team.docked !== null) {
+    return (
+      <div className="glossy mt-4 rounded-2xl p-4 text-center">
+        <p className="font-display text-2xl text-gold">🎤 You&apos;re at the Stage</p>
+        <p className="font-bold text-white/80">+{r.points} points this round</p>
+      </div>
+    );
+  }
   return (
     <div className="glossy mt-4 rounded-2xl p-4 text-center">
-      {r.stageFright ? (
-        <>
-          <p className="font-display text-3xl text-sky-300">😰 STAGE FRIGHT</p>
-          <p className="font-bold text-white/75">Nobody on your team got it. Your ship can&apos;t move this round.</p>
-        </>
-      ) : (
-        <>
-          {!r.speaker && r.fairJudge === undefined && (
-            <p className="font-bold text-white/80">
-              Your team: {r.correct}/{r.members} correct
-            </p>
-          )}
-          {r.speaker && <p className="font-bold text-white/80">Your speaker earned it!</p>}
-          {r.fairJudge && <p className="font-bold text-emerald-300">⚖️ Fair Judge bonus +1</p>}
-          <p className="font-display text-4xl text-gold">→ {r.mp} MP</p>
-          {r.quickDraw && <p className="stamp mt-1 inline-block rounded-lg border-2 border-gold px-2 font-display text-xl text-gold">QUICK DRAW! +1</p>}
-          {mods && <p className="mt-1 text-sm font-extrabold text-white/70">{mods}</p>}
-        </>
-      )}
+      <p className="font-bold text-white/85">
+        {r.speaker ? "Your pitch earned" : r.fairJudge ? "⚖️ Fair marking! You earned" : r.rated === false ? "No marks sent, so only" : r.rated ? "For marking the pitches" : `Your team: ${r.correct}/${r.members} correct`}
+      </p>
+      <p className="font-display text-4xl text-gold">
+        {r.steps} {r.steps === 1 ? "step" : "steps"} <span className="text-2xl text-emerald-300">+{r.points} pts</span>
+      </p>
+      {r.tailwind && <p className="text-sm font-extrabold text-sky-300">🌬️ Tailwind: +1 step for being in last place</p>}
+      {team.order !== null && <p className="mt-1 text-sm font-extrabold text-white/70">You move {ORDINAL[team.order]} this round</p>}
     </div>
   );
 }
 
-function Scorecard({ name, team, res }: { name: string; team: string; res: SpeakerResult }) {
+function Scorecard({ team, res }: { team: string; res: SpeakerResult }) {
   return (
     <div className="glossy rounded-2xl p-3">
-      <div className="flex items-baseline justify-between">
-        <span className="font-display text-xl">{name}</span>
-        <span className="text-xs font-extrabold text-white/60">{team}</span>
-      </div>
+      <div className="font-display text-xl">{team}</div>
       {res.overall === null ? (
-        <p className="py-2 text-center font-bold text-white/60">No ratings received</p>
+        <p className="py-2 text-center font-bold text-white/60">No marks received</p>
       ) : (
         <>
           {SPOTLIGHT_CRITERIA.map((c) => {
@@ -270,7 +259,7 @@ function Scorecard({ name, team, res }: { name: string; team: string; res: Speak
               </div>
             );
           })}
-          <p className="mt-2 text-center font-display text-2xl text-gold">{res.overall.toFixed(1)} ★ overall</p>
+          <p className="mt-2 text-center font-display text-2xl text-gold">{res.overall.toFixed(1)} ★</p>
         </>
       )}
     </div>
@@ -285,8 +274,7 @@ function PhaseBody({ client, view, data, teamId, reduce }: { client: GameClient;
 
   // Confetti burst on a correct answer.
   const fired = useRef("");
-  const isReveal = phase.kind === "reveal" || phase.kind === "finalReveal";
-  const correct = isReveal ? data.reveal?.playerCorrect[myId] : undefined;
+  const correct = phase.kind === "reveal" ? data.reveal?.playerCorrect[myId] : undefined;
   useEffect(() => {
     if (correct && !reduce && fired.current !== phase.phaseId) {
       fired.current = phase.phaseId;
@@ -298,11 +286,11 @@ function PhaseBody({ client, view, data, teamId, reduce }: { client: GameClient;
     case "intro":
       return (
         <div className="flex flex-1 flex-col justify-center gap-3">
-          <BigScreen teamId={teamId} text="Here we go!" sub="Watch the big screen for how to play" />
+          <BigScreen teamId={teamId} text="Here we go!" sub="Sit with your team. This game is all about talking it through." />
           {[
-            ["🧠", "Answer the challenge", "Everyone answers. More correct = more movement."],
-            ["🗳️", "Vote where to fly", "Majority decides. Every hex you cross becomes yours."],
-            ["🎤", "Spotlight rounds", "One of you pitches for 20 seconds. Everyone else marks it."],
+            ["🔑", "Find your key, reach the Stage", "Your key is on the opposite island. Then fly to the middle."],
+            ["💬", "Talk first, then tap", "Discuss the question or plan your pitch. No rush."],
+            ["🥇", "Most points moves first", "Ships move one at a time. You can't land on another ship."],
           ].map(([icon, title, text]) => (
             <div key={title} className="glossy flex items-center gap-3 rounded-2xl p-3">
               <span className="text-3xl">{icon}</span>
@@ -315,36 +303,23 @@ function PhaseBody({ client, view, data, teamId, reduce }: { client: GameClient;
         </div>
       );
 
-    case "challenge":
-    case "finalQ": {
+    case "challenge": {
       const q = data.question;
       if (!q) return <BigScreen teamId={teamId} />;
       return (
         <div>
-          {data.criterion && (
-            <p className="mb-2 text-center text-xs font-extrabold uppercase tracking-widest" style={{ color: RUBRIC[data.criterion].css }}>
-              {RUBRIC[data.criterion].icon} {RUBRIC[data.criterion].label}
-            </p>
-          )}
-          {phase.kind === "finalQ" && <p className="mb-2 text-center font-display text-xl text-gold">True or false? ({(data.final?.qIndex ?? 0) + 1}/3)</p>}
-          {q.type === "order" ? (
-            <OrderPad key={q.id} question={q} sent={view.sent.answer as number[] | undefined} onAnswer={(o) => client.answer(o)} />
-          ) : (
-            <AnswerPad question={q} sent={view.sent.answer as number | undefined} onAnswer={(i) => client.answer(i)} slideWidth={slideW} />
-          )}
+          <p className="mb-2 text-center text-sm font-extrabold text-gold">💬 Discuss with your team first, then tap your team&apos;s answer</p>
+          <AnswerPad question={q} sent={view.sent.answer} onAnswer={(i) => client.answer(i)} slideWidth={slideW} />
         </div>
       );
     }
 
-    case "reveal":
-    case "finalReveal": {
+    case "reveal": {
       const rv = data.reveal;
       if (!rv) return <BigScreen teamId={teamId} />;
-      const passed = data.final?.perQ[data.final.perQ.length - 1]?.passed[teamId];
-      const claim = data.final?.bottom3.includes(teamId) ? 3 : 2;
       return (
         <div className="flex flex-1 flex-col">
-          <motion.div initial={{ scale: 0.3, rotate: -20 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", bounce: 0.55 }} className="text-center text-8xl">
+          <motion.div initial={{ scale: 0.3, rotate: -20 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", bounce: 0.55 }} className="text-center text-7xl">
             {correct === true ? "✅" : correct === false ? "❌" : "⏱️"}
           </motion.div>
           <p className="mt-1 text-center font-display text-3xl">{correct === true ? "Correct!" : correct === false ? "Not quite" : "No answer"}</p>
@@ -354,13 +329,7 @@ function PhaseBody({ client, view, data, teamId, reduce }: { client: GameClient;
             <p className="mt-2 text-xs font-extrabold uppercase tracking-widest text-gold">Why</p>
             <p className="text-base font-bold leading-snug text-white/90">{rv.why}</p>
           </div>
-          {phase.kind === "reveal" ? (
-            <MpLine data={data} teamId={teamId} />
-          ) : (
-            <div className="glossy mt-4 rounded-2xl p-4 text-center font-display text-2xl">
-              {passed ? <span className="text-gold">Your team claims {claim} tiles! 🌊</span> : <span className="text-white/70">No tiles this time</span>}
-            </div>
-          )}
+          <Earned data={data} teamId={teamId} />
         </div>
       );
     }
@@ -369,14 +338,20 @@ function PhaseBody({ client, view, data, teamId, reduce }: { client: GameClient;
       return <Vote client={client} view={view} data={data} teamId={teamId} />;
 
     case "resolve": {
-      const move = data.moves?.[teamId];
-      const sub = move?.clashAt
-        ? "💥 CLASH! Your ship was bounced back."
-        : move?.pickup
-          ? `🎁 You found ${CARD_INFO[move.pickup].icon} ${CARD_INFO[move.pickup].name}!`
-          : move && move.path.length > 1
-            ? `You painted ${move.painted.length} tile${move.painted.length === 1 ? "" : "s"}.`
-            : "Your ship is holding position.";
+      const move = data.moves?.find((m) => m.teamId === teamId);
+      const sub = !move
+        ? undefined
+        : move.docked
+          ? `🎤 You reached the Stage ${ORDINAL[move.docked - 1]}! +${move.bonus} points`
+          : move.gotKey
+            ? "🔑 You found your key! Now head for the Stage."
+            : move.blockedAt
+              ? "💥 Another ship got there first, so you stopped one hex short."
+              : move.stars.length
+                ? "⭐ You grabbed a star! +10"
+                : move.path.length > 1
+                  ? "Your ship is on the move."
+                  : "Your ship is holding position.";
       return <BigScreen teamId={teamId} sub={sub} />;
     }
 
@@ -386,74 +361,87 @@ function PhaseBody({ client, view, data, teamId, reduce }: { client: GameClient;
     case "spotReveal": {
       const spot = data.spot;
       if (!spot) return <BigScreen teamId={teamId} />;
-      const slot = spot.slot;
-      const speaker = spot.speakers[slot];
-      const speakerTeam = spot.teams[slot];
-      const iSpeak = speaker.id === myId;
-      const mySlot = spot.speakers.findIndex((s) => s.id === myId);
-      const myTeamSpeaks = speakerTeam === teamId;
+      const mySlot = spot.teams.indexOf(teamId);
+      const speakerTeamId = spot.teams[spot.slot];
+      const speakerTeam = data.teams[speakerTeamId];
+      const myTeamSpeaks = speakerTeamId === teamId;
 
       if (phase.kind === "spotReady") {
+        if (mySlot >= 0) {
+          return (
+            <div className="flex flex-1 flex-col">
+              <p className="text-center font-display text-3xl text-gold">🎤 Your team pitches {mySlot === 0 ? "FIRST" : "SECOND"}</p>
+              <div className="glossy mt-3 rounded-3xl p-4">
+                <p className="text-xs font-extrabold uppercase tracking-widest text-white/60">Your topic</p>
+                <p className="text-2xl font-extrabold leading-snug">{spot.topics[mySlot]}</p>
+              </div>
+              <p className="mt-3 text-center text-base font-extrabold">Choose ONE speaker. Plan 25 seconds together:</p>
+              <div className="mt-2 grid gap-2">
+                {PITCH_RECIPE.map(([label, hint], i) => (
+                  <div key={label} className="glossy flex items-center gap-3 rounded-xl px-3 py-2">
+                    <span className="grid h-8 w-8 place-items-center rounded-full bg-gold font-display text-ink">{i + 1}</span>
+                    <span>
+                      <span className="font-display text-lg text-gold">{label}</span> <span className="text-sm font-bold text-white/75">{hint}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-center text-sm font-bold text-white/65">The other teams will mark you on exactly these three.</p>
+            </div>
+          );
+        }
         return (
           <div className="flex flex-1 flex-col justify-center text-center">
-            <p className="font-display text-4xl text-gold">🎤 SPOTLIGHT ROUND</p>
-            {mySlot >= 0 ? (
-              <motion.div initial={{ scale: 0.7 }} animate={{ scale: 1 }} className="glossy mt-4 rounded-3xl border-gold p-5">
-                <p className="font-display text-3xl">It&apos;s YOU, {view.me.name}!</p>
-                <p className="mt-1 text-lg font-bold text-white/80">You speak {mySlot === 0 ? "FIRST — get ready now" : "SECOND"}. 20 seconds, out loud, to the room.</p>
-              </motion.div>
-            ) : (
-              <p className="mt-4 text-lg font-bold text-white/80">
-                {spot.speakers[0].name} and {spot.speakers[1].name} are about to pitch. You&apos;ll mark them on Hook, Clarity and Confidence.
-              </p>
-            )}
+            <p className="font-display text-3xl text-gold">🎤 Pitch round</p>
+            <p className="mt-2 text-lg font-bold text-white/85">
+              {data.teams[spot.teams[0]].name} and {data.teams[spot.teams[1]].name} are preparing a 25-second pitch.
+            </p>
+            <p className="mt-4 text-base font-extrabold">While you wait, agree as a team: what makes a pitch great?</p>
+            <div className="mt-2 grid gap-2 text-left">
+              {SPOTLIGHT_CRITERIA.map((c) => (
+                <div key={c.key} className="glossy rounded-xl px-3 py-2">
+                  <span className="font-display text-lg text-gold">{c.label}</span> <span className="text-sm font-bold text-white/75">— {c.hint}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-sm font-bold text-white/65">Marking earns you 2 steps. Marking fairly earns 3.</p>
           </div>
         );
       }
 
       if (phase.kind === "spotSpeak") {
-        if (iSpeak) {
+        if (myTeamSpeaks) {
           return (
             <div className="flex flex-1 flex-col justify-center text-center">
-              <motion.p initial={{ scale: 0.5 }} animate={{ scale: 1 }} transition={{ type: "spring", bounce: 0.6 }} className="font-display text-6xl text-gold">
+              <motion.p initial={{ scale: 0.5 }} animate={{ scale: 1 }} transition={{ type: "spring", bounce: 0.6 }} className="font-display text-5xl text-gold">
                 🎤 YOU&apos;RE ON!
               </motion.p>
               <div className="glossy mt-4 rounded-3xl p-5">
                 <p className="text-xs font-extrabold uppercase tracking-widest text-white/60">Your topic</p>
-                <p className="text-2xl font-extrabold leading-snug">{spot.topic}</p>
-                <p className="mt-3 text-xs font-extrabold uppercase tracking-widest text-gold">Twist</p>
-                <p className="text-xl font-extrabold">{spot.twist}</p>
+                <p className="text-2xl font-extrabold leading-snug">{spot.topics[spot.slot]}</p>
               </div>
-              <p className="mt-4 text-lg font-bold text-white/80">Stand up and speak to the room!</p>
+              <p className="mt-4 text-lg font-bold text-white/85">Speaker: stand up and talk to the room. Teammates: cheer them on! 📣</p>
             </div>
           );
         }
-        if (myTeamSpeaks) return <BigScreen teamId={teamId} text="Your team is speaking — cheer them on! 📣" sub={`${speaker.name} has 20 seconds.`} />;
         return (
           <div className="flex flex-1 flex-col justify-center text-center">
             <p className="text-5xl">👂</p>
-            <p className="mt-2 font-display text-3xl">Listen to {speaker.name}</p>
-            <p className="mt-2 text-base font-bold text-white/70">&ldquo;{spot.topic}&rdquo;</p>
-            <div className="mt-5 grid gap-2">
-              {SPOTLIGHT_CRITERIA.map((c) => (
-                <div key={c.key} className="glossy rounded-xl px-3 py-2 text-left">
-                  <span className="font-display text-lg text-gold">{c.label}</span> <span className="text-sm font-bold text-white/70">— {c.hint}</span>
-                </div>
-              ))}
-            </div>
-            <p className="mt-4 text-sm font-extrabold text-white/60">You&apos;ll rate in a moment. Be fair!</p>
+            <p className="mt-2 font-display text-3xl">Listen to {speakerTeam.name}</p>
+            <p className="mt-2 text-base font-bold text-white/75">&ldquo;{spot.topics[spot.slot]}&rdquo;</p>
+            <p className="mt-5 text-sm font-extrabold text-white/65">You&apos;ll mark Hook, Clarity and Confidence in a moment.</p>
           </div>
         );
       }
 
       if (phase.kind === "spotRate") {
-        if (myTeamSpeaks) return <BigScreen teamId={teamId} text="Your team is speaking — cheer them on! 📣" sub="The other teams are marking the pitch." />;
+        if (myTeamSpeaks) return <BigScreen teamId={teamId} text="Well done! 👏" sub="The other teams are marking your pitch." />;
         return (
           <div>
             <p className="mb-3 text-center font-display text-2xl">
-              Rate <span className="text-gold">{speaker.name}</span>
+              Mark <span style={{ color: TEAM_DEFS[speakerTeamId].text }}>{speakerTeam.name}</span>
             </p>
-            <RatingStars key={phase.phaseId} sent={view.sent.rating} onRate={(r) => client.rate(speakerTeam, r)} />
+            <RatingStars key={phase.phaseId} sent={view.sent.rating} onRate={(r) => client.rate(speakerTeamId, r)} />
           </div>
         );
       }
@@ -461,17 +449,12 @@ function PhaseBody({ client, view, data, teamId, reduce }: { client: GameClient;
       return (
         <div className="grid gap-3">
           {spot.results?.map((res, i) => (
-            <Scorecard key={i} name={spot.speakers[i].name} team={data.teams[spot.teams[i]].name} res={res} />
+            <Scorecard key={i} team={data.teams[spot.teams[i]].name} res={res} />
           ))}
-          <MpLine data={data} teamId={teamId} />
+          <Earned data={data} teamId={teamId} />
         </div>
       );
     }
-
-    case "finalBanner":
-      return <BigScreen teamId={teamId} text="🌙 FINAL SHOWDOWN" sub="3 rapid-fire true/false questions. Each one your team gets right floods more territory." />;
-    case "finalFlood":
-      return <BigScreen teamId={teamId} text="🌊 Territory flood!" sub={data.final?.stageWinner === teamId ? "YOUR TEAM TAKES THE KEYNOTE STAGE! +100" : "Watch the Keynote Stage…"} />;
 
     case "results":
     case "debrief":
@@ -479,7 +462,6 @@ function PhaseBody({ client, view, data, teamId, reduce }: { client: GameClient;
     default: {
       const row = data.results?.ranking.find((r) => r.teamId === teamId);
       const mine = data.results?.personal[myId];
-      const award = data.results?.awards.filter((a) => a.playerId === myId) ?? [];
       const over = phase.kind === "over";
       return (
         <div className="flex flex-1 flex-col text-center">
@@ -488,44 +470,32 @@ function PhaseBody({ client, view, data, teamId, reduce }: { client: GameClient;
             <motion.div initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glossy mt-4 rounded-3xl p-5">
               <p className="text-sm font-extrabold uppercase tracking-widest text-white/60">Your team finished</p>
               <p className="font-display text-7xl" style={{ color: TEAM_DEFS[teamId].text }}>
-                {["1st", "2nd", "3rd", "4th", "5th", "6th"][row.rank - 1]}
+                {ORDINAL[row.rank - 1]}
               </p>
-              <p className="text-lg font-extrabold">
-                {row.score} points · {row.tiles} tiles
+              <p className="text-lg font-extrabold">{row.score} points</p>
+              <p className="mt-1 text-sm font-bold text-white/75">
+                {row.docked !== null ? `🎤 Reached the Stage ${ORDINAL[row.docked - 1]}` : row.hasKey ? "🔑 Found the key" : "Still looking for the key"}
+                {row.stars > 0 ? ` · ⭐ ${row.stars}` : ""}
+                {row.pitch !== null ? ` · pitch ${row.pitch.toFixed(1)}★` : ""}
               </p>
-              {(row.mastery.length > 0 || row.stage) && (
-                <p className="mt-1 text-sm font-bold text-white/75">
-                  {row.stage ? "🎤 Keynote Stage  " : ""}
-                  {row.mastery.map((m) => `${RUBRIC[m].icon} ${RUBRIC[m].label}`).join("  ")}
-                </p>
-              )}
+              {data.results?.bestPitch === teamId && <p className="stamp mt-2 inline-block rounded-lg border-2 border-gold px-2 font-display text-xl text-gold">BEST PITCH!</p>}
             </motion.div>
           )}
           {mine && (
-            <div className="glossy mt-3 grid grid-cols-3 gap-2 rounded-3xl p-4">
-              <Stat label="Correct" value={`${mine.correct}/${mine.answered}`} />
-              <Stat label="Avg speed" value={mine.avgMs !== null ? `${(mine.avgMs / 1000).toFixed(1)}s` : "—"} />
-              <Stat label={mine.spotlight !== null ? "Your pitch" : "Pitches rated"} value={mine.spotlight !== null ? `${mine.spotlight.toFixed(1)}★` : String(mine.ratings)} />
+            <div className="glossy mt-3 grid grid-cols-2 gap-2 rounded-3xl p-4">
+              <Stat label="Your answers" value={`${mine.correct}/${mine.answered} right`} />
+              <Stat label="Pitches marked" value={String(mine.ratings)} />
             </div>
           )}
-          {award.map((a) => (
-            <div key={a.key} className="stamp mt-3 rounded-2xl border-2 border-gold bg-gold/15 p-3 font-display text-2xl text-gold">
-              {a.icon} You won {a.title}!
-            </div>
-          ))}
           {data.debrief && (
             <div className="glossy mt-3 rounded-3xl p-4 text-left">
-              {data.debrief.strongest && (
-                <p className="font-bold">
-                  🏆 Room&apos;s strongest skill: <span className="text-gold">{RUBRIC[data.debrief.strongest].label}</span>
-                </p>
-              )}
-              {data.debrief.weakest && (
-                <p className="font-bold">
-                  🎯 Skill to work on: <span className="text-gold">{RUBRIC[data.debrief.weakest].label}</span>
-                </p>
-              )}
-              <p className="mt-2 text-sm font-bold text-white/75">{data.debrief.prompt}</p>
+              <p className="text-xs font-extrabold uppercase tracking-widest text-gold">Takeaways</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-sm font-bold text-white/85">
+                {data.debrief.takeaways.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-sm font-extrabold text-white">{data.debrief.prompt}</p>
             </div>
           )}
           {!row && <LockedIn />}
@@ -547,42 +517,22 @@ function Stat({ label, value }: { label: string; value: string }) {
 function Vote({ client, view, data, teamId }: { client: GameClient; view: ClientView; data: PublicData; teamId: TeamId }) {
   const reach = data.reach?.[teamId] ?? [];
   const team = data.teams[teamId];
-  const r = data.teamResults?.[teamId];
-  const dest = view.sent.vote?.dest ?? null;
-  const card: CardId | "none" = view.sent.vote?.card ?? "none";
-  const send = (d: string, c: CardId | "none") => client.vote(d, c);
+  const dest = view.sent.vote ?? null;
 
+  if (team.docked !== null) return <BigScreen teamId={teamId} text="🎤 You're at the Stage!" sub="Keep answering and pitching: every point still counts." />;
   if (!view.tiles) return <BigScreen teamId={teamId} text="Loading map…" />;
   return (
     <div className="flex flex-1 flex-col">
       <p className="text-center font-display text-2xl">
-        {r?.stageFright || !reach.length ? (
-          <span className="text-sky-300">😰 Stage Fright — no movement this round</span>
-        ) : (
-          <>
-            Where to? <span className="text-gold">{r?.mp ?? 0} MP</span>
-          </>
-        )}
+        {team.steps ?? 0} {team.steps === 1 ? "step" : "steps"}
+        {team.order !== null && <span className="text-base text-white/70"> · you move {ORDINAL[team.order]}</span>}
       </p>
-      <p className="text-center text-xs font-bold text-white/60">Tap a glowing hex. Dots are your teammates&apos; votes — majority wins.</p>
-      <VoteMap
-        tiles={view.tiles}
-        teams={data.teams}
-        teamId={teamId}
-        reach={reach}
-        tally={view.tally}
-        selected={dest && dest !== "hold" ? dest : null}
-        onSelect={(k) => send(k, card)}
-        className="mx-auto my-1 max-h-[50dvh] min-h-[38dvh] w-full"
-      />
-      <button
-        className="btn w-full text-lg text-white"
-        style={{ background: dest === "hold" ? "#7c3aed" : "#334155", outline: dest === "hold" ? "3px solid #ffd54a" : "none" }}
-        onClick={() => send("hold", card)}
-      >
-        ⚓ Hold position{view.tally.hold ? ` · ${view.tally.hold} vote${view.tally.hold > 1 ? "s" : ""}` : ""}
+      <p className="text-center text-sm font-extrabold text-gold">{team.hasKey ? "🔑 Got your key! Head for the 🎤 Stage in the middle." : "First fly to your 🔑 key (the big one in your colour)."}</p>
+      <p className="text-center text-xs font-bold text-white/60">Agree with your team, then tap a glowing hex. Dots show your teammates&apos; votes.</p>
+      <VoteMap tiles={view.tiles} teams={data.teams} teamId={teamId} reach={reach} tally={view.tally} selected={dest && dest !== "hold" ? dest : null} onSelect={(k) => client.vote(k)} radius={8} className="mx-auto my-1 max-h-[52dvh] min-h-[40dvh] w-full" />
+      <button className="btn w-full text-lg text-white" style={{ background: dest === "hold" ? "#7c3aed" : "#334155", outline: dest === "hold" ? "3px solid #ffd54a" : "none" }} onClick={() => client.vote("hold")}>
+        ⚓ Stay here{view.tally.hold ? ` · ${view.tally.hold} vote${view.tally.hold > 1 ? "s" : ""}` : ""}
       </button>
-      <CardRow cards={team.cards} selected={card} onSelect={(c) => send(dest ?? "hold", c)} />
       {dest && <p className="mt-2 text-center text-sm font-extrabold text-emerald-300">Vote in ✓ — you can change it until time runs out</p>}
     </div>
   );

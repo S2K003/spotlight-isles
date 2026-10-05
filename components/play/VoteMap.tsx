@@ -63,20 +63,24 @@ export function VoteMap({ tiles, teams, teamId, reach, tally, selected, onSelect
         return (
           <g
             key={k}
-            opacity={can || ship?.id === teamId ? 1 : 0.42}
+            opacity={can || ship?.id === teamId || t.key === teamId || t.type === "stage" ? 1 : 0.5}
             onClick={can ? () => onSelect(k) : undefined}
             style={{ cursor: can ? "pointer" : "default" }}
             role={can ? "button" : undefined}
             aria-label={can ? `Move to hex ${k}, cost ${cost}` : undefined}
           >
             <polygon points={hexPoints(c.x, c.y, SIZE - 1.5, SQ)} fill={toCss(col.top)} stroke={toCss(col.side)} strokeWidth="2" />
-            {owner && <polygon points={hexPoints(c.x, c.y, SIZE - 7, SQ)} fill={owner.color} fillOpacity="0.72" stroke="rgba(255,255,255,0.7)" strokeWidth="1" />}
-            {owner && !ship && <polygon points={emblemSvgPoints(owner.shape, c.x, c.y + 9, 5)} fill="rgba(0,0,0,0.5)" />}
+            {owner && <polygon points={hexPoints(c.x, c.y, SIZE - 7, SQ)} fill={owner.color} fillOpacity="0.35" />}
             {t.type === "water" && <path d={`M${c.x - 12} ${c.y} q6 -6 12 0 t12 0`} stroke="#dff5ff" strokeWidth="2.5" fill="none" />}
             {t.type === "fog" && <text x={c.x} y={c.y + 5} textAnchor="middle" fontSize="15">☁️</text>}
-            {t.type === "swamp" && <text x={c.x} y={c.y + 5} textAnchor="middle" fontSize="14">🫧</text>}
             {t.type === "stage" && <text x={c.x} y={c.y + 6} textAnchor="middle" fontSize="18">🎤</text>}
-            {t.chest && <text x={c.x} y={c.y + 6} textAnchor="middle" fontSize="17">🎁</text>}
+            {t.star && <text x={c.x} y={c.y + 6} textAnchor="middle" fontSize="17">⭐</text>}
+            {t.key !== undefined && (
+              <g opacity={t.key === teamId ? 1 : 0.55}>
+                <circle cx={c.x} cy={c.y - 1} r={t.key === teamId ? 13 : 9} fill={TEAM_DEFS[t.key].color} stroke={t.key === teamId ? "#fff" : "rgba(0,0,0,.4)"} strokeWidth={t.key === teamId ? 3 : 1.5} />
+                <text x={c.x} y={c.y + (t.key === teamId ? 5 : 3)} textAnchor="middle" fontSize={t.key === teamId ? 15 : 10}>🔑</text>
+              </g>
+            )}
             {can && (
               <polygon
                 points={hexPoints(c.x, c.y, SIZE - 3, SQ)}
@@ -87,7 +91,7 @@ export function VoteMap({ tiles, teams, teamId, reach, tally, selected, onSelect
               />
             )}
             {can && t.type === "fog" && (
-              <text x={c.x + 14} y={c.y - 10} textAnchor="middle" fontSize="10" fontWeight="900" fill="#fff" stroke="#111" strokeWidth="2.5" paintOrder="stroke">2 MP</text>
+              <text x={c.x + 13} y={c.y - 10} textAnchor="middle" fontSize="10" fontWeight="900" fill="#fff" stroke="#111" strokeWidth="2.5" paintOrder="stroke">×2</text>
             )}
             {ship && (
               <g>

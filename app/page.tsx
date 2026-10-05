@@ -28,7 +28,7 @@ export default function Landing() {
           <br />
           ISLES
         </h1>
-        <p className="mt-3 text-center text-lg font-bold text-white/90">Six airships. One archipelago. 15 minutes to master the art of presenting.</p>
+        <p className="mt-3 text-center text-lg font-bold text-white/90">Six airship crews race to the Keynote Stage. Talk it through, pitch it well, fly first.</p>
 
         <form
           className="glossy mt-8 w-full rounded-3xl p-5"

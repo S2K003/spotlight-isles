@@ -54,8 +54,12 @@ const shot = async (page, name) => {
   await page.screenshot({ path: path.join(SHOTS, `${name}.png`) }).catch(() => {});
 };
 
+const startButton = (page) => page.getByRole("button", { name: "START", exact: true });
 const snapshot = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("spotlight-isles:host") ?? "null"));
+const startedAt = async (page) => (await page.waitForFunction(() => JSON.parse(localStorage.getItem("spotlight-isles:host") ?? "{}").startedAt ?? false, null, { polling: 20 })).jsonValue();
 const waitOver = (page, timeout) => page.waitForFunction(() => (document.body.innerText.includes("GAME OVER") && document.querySelector(".stamp") ? Date.now() : false), null, { timeout, polling: 20 });
+const away = (state) => state.teams.filter((t) => t.pos.q !== t.home.q || t.pos.r !== t.home.r).length;
+const summary = (state) => `scores ${state.teams.map((t) => t.score).join(", ")}; keys ${state.teams.filter((t) => t.hasKey).length}/6; at the Stage ${state.teams.filter((t) => t.docked !== null).length}/6`;
 
 async function fullGame(browser) {
   console.log("\n— Full game at 10× with 40 bots and a phone —");
@@ -64,8 +68,8 @@ async function fullGame(browser) {
   const host = await ctx.newPage();
   watch(host, "host", errors);
   await host.goto(`${BASE}/host?speed=10&fresh=1`);
-  await host.getByRole("button", { name: "START", exact: true }).waitFor();
-  const code = (await snapshot(host))?.roomCode ?? (await host.evaluate(() => document.body.innerText.match(/\b[A-HJ-NP-Z]{4}\b/)?.[0]));
+  await startButton(host).waitFor();
+  const code = (await snapshot(host))?.roomCode;
   note(/^[A-HJ-NP-Z]{4}$/.test(code ?? ""), `room code ${code}`);
 
   const bots = await ctx.newPage();
@@ -85,25 +89,24 @@ async function fullGame(browser) {
   await shot(phone, "phone-02-waiting");
 
   await host.bringToFront();
-  await host.waitForFunction(() => Number(document.body.innerText.match(/(\d+)\s*\n?\s*players ready/)?.[1] ?? 0) >= 41, null, { timeout: 8000 }).catch(() => {});
-  const lobbyCount = await host.evaluate(() => document.querySelectorAll("button[title='Click to remove this player']").length);
-  note(lobbyCount >= 41, `lobby shows ${lobbyCount} players (40 bots + 1 phone) after ${Date.now() - t0} ms`);
-  await sleep(1500);
+  const chips = () => host.evaluate(() => document.querySelectorAll("button[title='Click to remove this player']").length);
+  for (let i = 0; i < 80 && (await chips()) < 41; i++) await sleep(100);
+  note((await chips()) >= 41, `lobby shows ${await chips()} players (40 bots + 1 phone) after ${Date.now() - t0} ms`);
+  await sleep(1200);
   await shot(host, "host-01-lobby");
 
-  await host.getByRole("button", { name: "START", exact: true }).click();
-  const startedAt = (await host.waitForFunction(() => JSON.parse(localStorage.getItem("spotlight-isles:host") ?? "{}").startedAt ?? false, null, { polling: 20 })).jsonValue();
-  const start = await startedAt;
+  await startButton(host).click();
+  const start = await startedAt(host);
 
-  // Screenshots at interesting game-time moments (seconds of the 15:00 clock ÷ 10).
+  // Screenshots at interesting moments (seconds of the 15:00 clock ÷ 10).
   const marks = [
-    [1.2, "intro-title"], [3.2, "intro-rules"], [5.2, "challenge"], [6.3, "reveal"], [7.2, "vote"], [8.2, "resolve"],
-    [9.9, "challenge-slide"], [13.6, "spot-ready"], [15.0, "spot-speak"], [16.2, "spot-rate"], [19.6, "spot-reveal"], [20.6, "spot-vote"],
-    [36.5, "round6"], [52.5, "sunset-vote"], [53.6, "sunset-resolve"], [71.7, "final-banner"], [72.6, "final-q"], [73.5, "final-reveal"],
-    [77.4, "final-flood"], [78.7, "final-stage"], [80.0, "results-count"], [82.0, "results-podium"], [84.6, "results-awards"], [87.5, "debrief"],
+    [1.5, "intro-title"], [3.4, "intro-rules"], [6.0, "challenge"], [8.9, "reveal"], [11.0, "vote"], [13.3, "resolve"],
+    [15.6, "pitch-prep"], [18.6, "pitch-speak"], [20.4, "pitch-rate"], [25.1, "pitch-scorecards"], [27.2, "vote-2"], [29.6, "resolve-2"],
+    [32.5, "challenge-3"], [37.5, "vote-3"], [40.1, "resolve-3"], [53.8, "vote-4"], [56.2, "resolve-4"], [64.0, "vote-5"], [66.6, "resolve-5"],
+    [80.0, "vote-6"], [82.6, "resolve-6"], [84.3, "results-count"], [85.6, "results-podium"], [86.6, "results-best"], [88.6, "debrief"],
   ];
-  const phoneMarks = new Set(["challenge", "reveal", "vote", "resolve", "spot-speak", "spot-rate", "spot-reveal", "final-q", "debrief"]);
-  let phoneAnswered = 0;
+  const phoneMarks = new Set(["challenge", "reveal", "vote", "resolve", "pitch-prep", "pitch-speak", "pitch-rate", "pitch-scorecards", "vote-3", "debrief"]);
+  let phoneTaps = 0;
   const overPromise = waitOver(host, 120_000);
   for (const [sec, name] of marks) {
     const wait = start + sec * 1000 - Date.now();
@@ -111,14 +114,10 @@ async function fullGame(browser) {
     await shot(host, `host-${String(Math.round(sec * 10)).padStart(3, "0")}-${name}`);
     if (phoneMarks.has(name)) await shot(phone, `phone-${String(Math.round(sec * 10)).padStart(3, "0")}-${name}`);
     // Play along on the phone where we can.
-    if (name === "challenge" || name === "final-q") {
-      const btn = phone.locator("section button:not([disabled])").first();
-      if (await btn.count()) {
-        await btn.click({ timeout: 300 }).catch(() => {});
-        phoneAnswered++;
-      }
-    } else if (name === "vote" || name === "spot-vote" || name === "sunset-vote") {
-      await phone.locator("svg g[role='button']").first().click({ timeout: 300 }).catch(() => {});
+    if (name.startsWith("challenge")) {
+      await phone.locator("section button").first().click({ timeout: 300 }).then(() => phoneTaps++).catch(() => {});
+    } else if (name.startsWith("vote")) {
+      await phone.locator("svg g[role='button']").first().click({ timeout: 300 }).then(() => phoneTaps++).catch(() => {});
     }
   }
   const end = await (await overPromise).jsonValue();
@@ -129,16 +128,14 @@ async function fullGame(browser) {
   await shot(phone, "phone-900-thanks");
 
   const final = await snapshot(host);
-  note(final.history.length === 12, `12 rounds resolved (${final.history.length})`);
+  note(final.usedQuestions.length === 3 && final.pitches.every((p) => p !== null), `3 questions asked and all 6 teams pitched (${final.usedQuestions.join(", ")})`);
   note(!!final.results && !!final.debrief, "results and debrief computed");
-  const moved = final.teams.filter((t) => t.pos.q !== t.home.q || t.pos.r !== t.home.r).length;
-  note(moved >= 4, `${moved}/6 ships left home; scores ${final.teams.map((t) => t.score).join(", ")}`);
-  const stats = Object.values(final.players);
-  const answered = stats.reduce((s, p) => s + p.stats.answered, 0);
-  const ratings = stats.reduce((s, p) => s + p.stats.ratings, 0);
-  note(answered > 300, `${answered} answers and ${ratings} ratings recorded from ${stats.length} players`);
-  note(ratings > 100, "spotlight ratings came through");
-  note(await phone.locator("text=Thanks for playing").count() > 0, `phone shows the thank-you screen (answered ${phoneAnswered} on the phone)`);
+  note(away(final) >= 5 && final.teams.filter((t) => t.hasKey).length >= 3, `${away(final)}/6 ships left home; ${summary(final)}`);
+  const players = Object.values(final.players);
+  const answered = players.reduce((s, p) => s + p.stats.answered, 0);
+  const ratings = players.reduce((s, p) => s + p.stats.ratings, 0);
+  note(answered > 90 && ratings > 100, `${answered} answers and ${ratings} pitch marks recorded from ${players.length} players`);
+  note((await phone.locator("text=Thanks for playing").count()) > 0, `phone shows the thank-you screen (${phoneTaps} taps on the phone)`);
   const fps = await host.evaluate(() => new Promise((res) => { let n = 0; const t = performance.now(); const f = () => { n++; performance.now() - t < 1000 ? requestAnimationFrame(f) : res(n); }; requestAnimationFrame(f); }));
   console.log(`      (headless software-GL frame rate: ~${fps} fps; not representative of a real GPU)`);
   note(errors.length === 0, `console clean (${errors.length} errors)`);
@@ -153,19 +150,19 @@ async function reloadResume(browser) {
   const host = await ctx.newPage();
   watch(host, "host", errors);
   await host.goto(`${BASE}/host?speed=30&fresh=1`);
-  await host.getByRole("button", { name: "START", exact: true }).waitFor();
+  await startButton(host).waitFor();
   const code = (await snapshot(host)).roomCode;
   const bots = await ctx.newPage();
   await bots.goto(`${BASE}/dev/bots?code=${code}&count=12`);
   await host.bringToFront();
   await sleep(1500);
-  await host.getByRole("button", { name: "START", exact: true }).click();
+  await startButton(host).click();
   await host.click("text=GO!", { timeout: 500 }).catch(() => {});
-  const start = await (await host.waitForFunction(() => JSON.parse(localStorage.getItem("spotlight-isles:host") ?? "{}").startedAt ?? false, null, { polling: 20 })).jsonValue();
+  const start = await startedAt(host);
   await sleep(9000);
   const before = await snapshot(host);
   await host.goto(`${BASE}/host`); // reload without ?fresh: must pick the snapshot up
-  await host.waitForSelector("text=/ROUND|FINAL|RESULTS|DEBRIEF/", { timeout: 5000 }).catch(() => {});
+  await host.waitForSelector("text=/ROUND|RESULTS|DEBRIEF/", { timeout: 5000 }).catch(() => {});
   await sleep(600);
   const after = await snapshot(host);
   note(after.roomCode === code && after.startedAt === start, "same room and start time after reload");
@@ -175,37 +172,38 @@ async function reloadResume(browser) {
   const elapsed = (end - start) / 1000;
   note(Math.abs(elapsed - 30) <= 0.5, `ended after ${elapsed.toFixed(2)} s from the ORIGINAL start (target 30.00 ±0.5)`);
   const final = await snapshot(host);
-  note(Object.values(final.players).some((p) => p.stats.answered > 3), "bots were re-attached after the reload and kept answering");
+  note(Object.values(final.players).some((p) => p.stats.answered >= 2), "bots were re-attached after the reload and kept answering");
   note(errors.length === 0, `console clean (${errors.length} errors)`);
   for (const e of errors.slice(0, 8)) console.log("      " + e);
   await ctx.close();
 }
 
 async function manualMode(browser) {
-  console.log("\n— Manual Mode: a whole game with no phones (8×) —");
+  console.log("\n— Manual Mode: a whole game with no phones (6×) —");
   const errors = [];
   const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
   const host = await ctx.newPage();
   watch(host, "host", errors);
-  await host.goto(`${BASE}/host?speed=8&fresh=1`);
-  await host.getByRole("button", { name: "START", exact: true }).waitFor();
+  await host.goto(`${BASE}/host?speed=6&fresh=1`);
+  await startButton(host).waitFor();
   await host.check("input[type=checkbox]");
-  await host.getByRole("button", { name: "START", exact: true }).click();
-  const start = await (await host.waitForFunction(() => JSON.parse(localStorage.getItem("spotlight-isles:host") ?? "{}").startedAt ?? false, null, { polling: 20 })).jsonValue();
-  const overPromise = waitOver(host, 150_000);
+  await startButton(host).click();
+  const start = await startedAt(host);
+  const overPromise = waitOver(host, 200_000);
   let clicks = 0;
-  let shots = 0;
+  const shots = new Set();
   // Click through the manual panel like an operator would.
-  while (Date.now() - start < 111_000) {
+  while (Date.now() - start < 148_000) {
     const panel = host.locator("text=MANUAL MODE").locator("xpath=ancestor::div[contains(@class,'glossy')]");
     if (await panel.count()) {
       const title = await panel.innerText().catch(() => "");
       if (/got it right|Hands up/.test(title)) {
-        for (const label of ["80+", "50–79", "1–49"]) {
+        for (const label of ["Most", "About half", "A few"]) {
           const b = panel.locator(`button:has-text("${label}")`);
           const n = await b.count();
           if (n) await b.nth(Math.floor(Math.random() * n)).click({ timeout: 200 }).then(() => clicks++).catch(() => {});
         }
+        if (/got it right/.test(title) && !shots.has("bands")) { shots.add("bands"); await shot(host, "manual-bands"); }
       } else if (/destination/.test(title)) {
         const tabs = panel.locator("button:has(svg)");
         const n = Math.min(6, await tabs.count());
@@ -214,27 +212,20 @@ async function manualMode(browser) {
           const hexes = panel.locator("svg g[role='button']");
           const h = await hexes.count();
           if (h) await hexes.nth(Math.floor(Math.random() * h)).click({ timeout: 200 }).then(() => clicks++).catch(() => {});
+          if (i === 1 && !shots.has("vote")) { shots.add("vote"); await shot(host, "manual-vote"); }
         }
-        if (shots === 1) { await shot(host, "manual-vote"); shots++; }
       } else if (/star rating/.test(title)) {
         await panel.locator("button:has-text('★')").nth(3).click({ timeout: 200 }).then(() => clicks++).catch(() => {});
         await panel.locator("button:has-text('★')").nth(9).click({ timeout: 200 }).catch(() => {});
-      } else if (/Which way/.test(title)) {
-        const b = panel.locator("button:has-text('TRUE'), button:has-text('FALSE')");
-        const n = await b.count();
-        for (let i = 0; i < n; i += 2) await b.nth(i + (Math.random() < 0.5 ? 0 : 1)).click({ timeout: 200 }).then(() => clicks++).catch(() => {});
+        if (!shots.has("stars")) { shots.add("stars"); await shot(host, "manual-stars"); }
       }
-      if (shots === 0 && /got it right/.test(title)) { await shot(host, "manual-bands"); shots++; }
     }
-    await sleep(40);
+    await sleep(60);
   }
   const end = await (await overPromise).jsonValue();
   const final = await snapshot(host);
-  const moved = final.teams.filter((t) => t.pos.q !== t.home.q || t.pos.r !== t.home.r).length;
-  note(Math.abs((end - start) / 1000 - 112.5) <= 0.5, `ended after ${((end - start) / 1000).toFixed(2)} s (target 112.50)`);
-  // The scripted operator is slow under software rendering, so it only reaches some teams each vote.
-  const painted = final.teams.reduce((s, t) => s + t.score, 0);
-  note(clicks > 20 && painted > 100, `${clicks} operator clicks moved ships from the panel; ${moved}/6 away from home at the end; scores ${final.teams.map((t) => t.score).join(", ")}`);
+  note(Math.abs((end - start) / 1000 - 150) <= 0.5, `ended after ${((end - start) / 1000).toFixed(2)} s (target 150.00)`);
+  note(clicks > 20 && away(final) >= 3, `${clicks} operator clicks; ${away(final)}/6 ships left home; ${summary(final)}`);
   note(final.debrief?.takeaways.length === 3, "debrief produced with no phones");
   note(errors.length === 0, `console clean (${errors.length} errors)`);
   for (const e of errors.slice(0, 8)) console.log("      " + e);
@@ -248,20 +239,18 @@ async function staticPages(browser) {
   const page = await ctx.newPage();
   watch(page, "page", errors);
   await page.goto(BASE);
-  note(await page.locator("text=JOIN GAME").count() > 0, "landing renders");
+  note((await page.locator("text=JOIN GAME").count()) > 0, "landing renders");
   await shot(page, "landing");
   await page.setViewportSize({ width: 1000, height: 1300 });
   await page.goto(`${BASE}/guide?code=ABCD`);
   await page.waitForSelector("img[alt^='QR code']");
-  note(await page.locator(".sheet").count() === 4, "guide has 2 guide pages + question bank + QR poster");
+  note((await page.locator(".sheet").count()) === 4, "guide has 2 guide pages + question bank + QR poster");
   // Every sheet must fit on one A4 page when printed (296 mm tall), or it would be clipped.
   await page.emulateMedia({ media: "print" });
   const fit = await page.evaluate(() => Array.from(document.querySelectorAll(".sheet"), (s) => Math.round((s.scrollHeight / s.clientHeight) * 100)));
   note(fit.every((p) => p <= 100), `each guide sheet fits one A4 page (content is ${fit.join("%, ")}% of the page height)`);
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "guide-print.png"), fullPage: true }).catch(() => {});
   await page.emulateMedia({ media: "screen" });
-  await shot(page, "guide");
-  if (SHOTS) await page.pdf({ path: path.join(SHOTS, "guide.pdf"), format: "A4", printBackground: true }).catch(() => {});
   note(errors.length === 0, `console clean (${errors.length} errors)`);
   for (const e of errors.slice(0, 8)) console.log("      " + e);
   await ctx.close();

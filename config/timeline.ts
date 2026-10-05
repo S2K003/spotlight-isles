@@ -1,42 +1,37 @@
-import type { CriterionKey, TeamId } from "@/lib/engine/types";
+import type { TeamId } from "@/lib/engine/types";
 
-/** All durations in seconds. The engine builds the phase list from this file; a test asserts the total is 900. */
+/**
+ * All durations in seconds. The engine builds the phase list from this file; a test asserts the
+ * total is exactly 900 (15:00). The phases are deliberately long: this game is mostly talking.
+ */
 export const DUR = {
   intro: 40,
-  challenge: 20,
-  reveal: 6,
-  vote: 12,
-  resolve: 8,
-  spotReady: 5,
-  spotSpeak: 20,
-  spotRate: 8,
-  spotReveal: 6,
-  finalBanner: 5,
-  finalQ: 12,
-  finalReveal: 5,
-  finalFlood: 19,
-  results: 60,
-  debrief: 50,
+  /** Team discusses the question and everyone taps the team's answer. */
+  challenge: 45,
+  reveal: 10,
+  /** Team agrees where to fly. */
+  vote: 35,
+  /** Ships move one at a time, highest score first. */
+  resolve: 14,
+  /** Both pitching teams choose a speaker and plan their pitch. */
+  spotReady: 30,
+  spotSpeak: 25,
+  spotRate: 12,
+  spotReveal: 8,
+  results: 35,
+  debrief: 30,
 } as const;
 
-export type RoundDef =
-  | { kind: "standard"; criterion: CriterionKey | "random" }
-  | { kind: "spotlight"; teams: [TeamId, TeamId] };
+export type RoundDef = { kind: "question" } | { kind: "spotlight"; teams: [TeamId, TeamId] };
 
+/** Six rounds: question, pitch, question, pitch, question, pitch. Every team pitches exactly once. */
 export const ROUNDS: RoundDef[] = [
-  { kind: "standard", criterion: "structure" },
-  { kind: "standard", criterion: "visuals" },
+  { kind: "question" },
   { kind: "spotlight", teams: [0, 1] },
-  { kind: "standard", criterion: "delivery" },
-  { kind: "standard", criterion: "engagement" },
+  { kind: "question" },
   { kind: "spotlight", teams: [2, 3] },
-  { kind: "standard", criterion: "timing" },
-  { kind: "standard", criterion: "qa" },
+  { kind: "question" },
   { kind: "spotlight", teams: [4, 5] },
-  { kind: "standard", criterion: "random" },
-  { kind: "standard", criterion: "random" },
-  { kind: "standard", criterion: "random" },
 ];
 
-export const FINAL_QUESTIONS = 3;
 export const TOTAL_MS = 900_000;

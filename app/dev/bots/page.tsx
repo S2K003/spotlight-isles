@@ -2,31 +2,22 @@
 
 import { useEffect, useRef, useState } from "react";
 import { TEAM_DEFS } from "@/config/teams";
-import { FINAL_BY_ID, QUESTION_BY_ID } from "@/content/questions";
+import { QUESTION_BY_ID } from "@/content/questions";
+import { distance, parseKey } from "@/lib/engine/hex";
 import { normalizeRoomCode } from "@/lib/engine/rng";
-import type { CardId, PublicQuestion, TeamId } from "@/lib/engine/types";
-import type { LobbyMsg, PhaseMsg, PlayerInfo } from "@/lib/net/messages";
+import type { PublicQuestion, TeamId, Tile } from "@/lib/engine/types";
+import type { LobbyMsg, MapMsg, PhaseMsg, PlayerInfo } from "@/lib/net/messages";
 import { createTransport, type Transport } from "@/lib/net/transport";
 
 const NAMES = ["Ada", "Bo", "Cy", "Dee", "Eli", "Fay", "Gus", "Hana", "Ivo", "Jun", "Kai", "Lux", "Mo", "Nia", "Oz", "Pia", "Quin", "Rae", "Sol", "Tao", "Uma", "Vik", "Wren", "Xan", "Yui", "Zed"];
 
-/** The right answer for a question, as an index (or order) into the shuffled options the host sent. */
-function rightAnswer(q: PublicQuestion): number | number[] {
-  const fq = FINAL_BY_ID[q.id];
-  if (fq) return fq.answer ? 0 : 1;
+/** The right answer, as an index into the shuffled options the host sent. */
+function rightAnswer(q: PublicQuestion): number {
   const src = QUESTION_BY_ID[q.id];
-  if (!src) return 0;
-  if (src.type === "order") return src.options.map((o) => q.options.indexOf(o));
-  return q.options.indexOf(src.options[src.correct]);
+  return src ? q.options.indexOf(src.options[src.correct]) : 0;
 }
 
-function wrongAnswer(q: PublicQuestion, right: number | number[]): number | number[] {
-  if (Array.isArray(right)) return right.slice().reverse();
-  const others = q.options.map((_, i) => i).filter((i) => i !== right);
-  return others[Math.floor(Math.random() * others.length)];
-}
-
-/** /dev/bots?count=40&code=ABCD — fake players that join, answer, vote and rate. */
+/** /dev/bots?count=40&code=ABCD — fake players that join, discuss (sort of), vote and mark pitches. */
 export default function BotsPage() {
   const [code, setCode] = useState("");
   const [count, setCount] = useState(40);
@@ -74,6 +65,7 @@ export default function BotsPage() {
     let lastPhase = "";
     let joined = false;
     let lastJoin = 0;
+    let tiles: Tile[] = [];
     const say = (s: string) => setLog((l) => [`${new Date().toLocaleTimeString()}  ${s}`, ...l].slice(0, 14));
     setStats((s) => ({ ...s, mode: transport.mode }));
 
@@ -102,29 +94,37 @@ export default function BotsPage() {
       lastPhase = p.phaseId;
       setStats((s) => ({ ...s, phase: `${p.phaseId} (${p.kind})` }));
       const d = p.publicData;
-      if ((p.kind === "challenge" || p.kind === "finalQ") && d.question) {
+      if (p.kind === "challenge" && d.question) {
         const q = d.question;
         const right = rightAnswer(q);
-        for (const b of bots) {
-          if (Math.random() < 0.06) continue; // some people are slow
-          soon(p.endsInMs, () => {
-            const choice = Math.random() < skillRef.current ? right : wrongAnswer(q, right);
-            transport.send("answer", { playerId: b.playerId, phaseId: p.phaseId, choice });
-            setStats((s) => ({ ...s, answers: s.answers + 1 }));
-          });
+        for (let team = 0; team < 6; team++) {
+          // A team "discusses" and mostly lands on one shared answer; a few members disagree.
+          const teamRight = Math.random() < skillRef.current;
+          const wrong = (right + 1 + Math.floor(Math.random() * 3)) % 4;
+          for (const b of bots.filter((x) => x.teamId === team)) {
+            if (Math.random() < 0.05) continue;
+            soon(p.endsInMs, () => {
+              const follows = Math.random() < 0.85;
+              const choice = follows === teamRight ? right : wrong;
+              transport.send("answer", { playerId: b.playerId, phaseId: p.phaseId, choice });
+              setStats((s) => ({ ...s, answers: s.answers + 1 }));
+            });
+          }
         }
       } else if (p.kind === "vote" && d.reach) {
         for (let team = 0; team < 6; team++) {
           const reach = d.reach[team] ?? [];
-          const cards = d.teams[team].cards as CardId[];
-          // Teams mostly agree (like a real table talking it through), with a few rebels.
-          const consensus = reach.length ? reach[Math.floor(Math.random() * reach.length)].key : "hold";
-          const card: CardId | "none" = cards.length && Math.random() < 0.6 ? cards[0] : "none";
+          const me = d.teams[team];
+          // Sensible crews: fly toward their own key, then toward the Stage.
+          const keyTile = tiles.find((t) => t.key === team);
+          const target = me.hasKey || !keyTile ? { q: 0, r: 0 } : keyTile;
+          const best = reach.slice().sort((a, b) => distance(parseKey(a.key), target) - distance(parseKey(b.key), target))[0];
+          const consensus = best && distance(parseKey(best.key), target) < distance(me.pos, target) ? best.key : "hold";
           for (const b of bots.filter((x) => x.teamId === team)) {
             soon(p.endsInMs, () => {
-              const rebel = reach.length && Math.random() < 0.25;
+              const rebel = reach.length && Math.random() < 0.15;
               const destination = rebel ? reach[Math.floor(Math.random() * reach.length)].key : consensus;
-              transport.send("vote", { playerId: b.playerId, phaseId: p.phaseId, destination, card });
+              transport.send("vote", { playerId: b.playerId, phaseId: p.phaseId, destination });
               setStats((s) => ({ ...s, votes: s.votes + 1 }));
             });
           }
@@ -147,6 +147,7 @@ export default function BotsPage() {
 
     const offMsg = transport.on((event, payload) => {
       if (event === "phase") onPhase(payload as PhaseMsg);
+      else if (event === "map") tiles = (payload as MapMsg).tiles;
       else if (event === "lobby") {
         const lobby = payload as LobbyMsg;
         const present = new Set(lobby.teams.flatMap((t) => t.players.map((p) => p.id)));
@@ -177,7 +178,7 @@ export default function BotsPage() {
     <main className="mx-auto max-w-2xl px-5 py-8">
       <h1 className="font-display text-4xl text-gold">Bot simulator</h1>
       <p className="mt-1 font-bold text-white/70">
-        Spawns fake players that join teams round-robin and answer, vote and rate. Open <code>/host</code> first (same browser if no Supabase keys are set), then start the bots. Keep this tab in its own visible window for realistic timing.
+        Spawns fake players that join teams round-robin, answer as teams, fly toward their key and the Stage, and mark pitches. Open <code>/host</code> first, then start the bots. Keep this tab in its own visible window for realistic timing.
       </p>
 
       <div className="glossy mt-5 grid grid-cols-3 gap-4 rounded-3xl p-5">
@@ -190,7 +191,7 @@ export default function BotsPage() {
           <input type="number" min={1} max={60} value={count} disabled={running} onChange={(e) => setCount(Math.max(1, Math.min(60, Number(e.target.value) || 1)))} className="mt-1 w-full rounded-xl bg-black/40 px-3 py-2 font-display text-3xl text-white outline-none" />
         </label>
         <label className="text-sm font-extrabold text-white/70">
-          Accuracy {Math.round(skill * 100)}%
+          Team accuracy {Math.round(skill * 100)}%
           <input type="range" min={0} max={1} step={0.05} value={skill} onChange={(e) => setSkill(Number(e.target.value))} className="mt-4 w-full" />
         </label>
         <button className={`btn col-span-3 text-2xl ${running ? "bg-rose-500 text-white" : "bg-gold text-ink"}`} disabled={code.length !== 4} onClick={() => setRunning((r) => !r)}>

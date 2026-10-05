@@ -1,4 +1,4 @@
-import { DUR, FINAL_QUESTIONS, ROUNDS } from "@/config/timeline";
+import { DUR, ROUNDS } from "@/config/timeline";
 import type { Phase, PhaseKind } from "./types";
 
 /** Build the full phase list from config. Offsets are cumulative from 0, so drift can't build up. */
@@ -15,8 +15,8 @@ export function buildTimeline(): Phase[] {
   ROUNDS.forEach((def, i) => {
     const round = i + 1;
     const p = `r${round}`;
-    if (def.kind === "standard") {
-      push(`${p}-challenge`, "challenge", DUR.challenge, round, { criterion: def.criterion });
+    if (def.kind === "question") {
+      push(`${p}-challenge`, "challenge", DUR.challenge, round);
       push(`${p}-reveal`, "reveal", DUR.reveal, round);
     } else {
       push(`${p}-ready`, "spotReady", DUR.spotReady, round, { teams: def.teams });
@@ -30,12 +30,6 @@ export function buildTimeline(): Phase[] {
     push(`${p}-resolve`, "resolve", DUR.resolve, round);
   });
 
-  push("final-banner", "finalBanner", DUR.finalBanner);
-  for (let i = 0; i < FINAL_QUESTIONS; i++) {
-    push(`final-q${i + 1}`, "finalQ", DUR.finalQ, undefined, { qIndex: i });
-    push(`final-reveal${i + 1}`, "finalReveal", DUR.finalReveal, undefined, { qIndex: i });
-  }
-  push("final-flood", "finalFlood", DUR.finalFlood);
   push("results", "results", DUR.results);
   push("debrief", "debrief", DUR.debrief);
   return phases;
