@@ -43,7 +43,7 @@ Create an empty repository on github.com and push to it (GitHub shows the two co
    | Name | Value |
    |---|---|
    | `NEXT_PUBLIC_SUPABASE_URL` | your Project URL |
-   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | your anon / publishable key |
+   | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | your publishable key (`sb_publishable_...`). On older projects, `NEXT_PUBLIC_SUPABASE_ANON_KEY` with the anon key also works. |
 
 3. **Deploy.** If you add or change the variables later, redeploy: they are baked in at build time.
 

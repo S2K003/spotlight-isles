@@ -68,6 +68,7 @@ export class HostController {
   private lastSnapshot = 0;
   private tallyTimer: ReturnType<typeof setTimeout> | null = null;
   private helloTimer: ReturnType<typeof setTimeout> | null = null;
+  private lobbyTimer: ReturnType<typeof setTimeout> | null = null;
   private notifyTimer: ReturnType<typeof setTimeout> | null = null;
   private unsub: (() => void)[] = [];
   private presentIds = new Set<string>();
@@ -426,8 +427,13 @@ export class HostController {
     return { phaseId: currentPhase(this.state)?.id ?? "", teams };
   }
 
+  /** Lobby updates are coalesced: 40 people joining at once produce a handful of messages, not 40. */
   private broadcastLobby(): void {
-    this.transport?.send("lobby", this.lobbyMsg());
+    if (this.lobbyTimer) return;
+    this.lobbyTimer = setTimeout(() => {
+      this.lobbyTimer = null;
+      this.transport?.send("lobby", this.lobbyMsg());
+    }, 120);
   }
   private broadcastPhase(): void {
     this.transport?.send("phase", this.phaseMsg());

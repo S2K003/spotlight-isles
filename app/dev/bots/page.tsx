@@ -73,6 +73,7 @@ export default function BotsPage() {
     const timers = new Set<ReturnType<typeof setTimeout>>();
     let lastPhase = "";
     let joined = false;
+    let lastJoin = 0;
     const say = (s: string) => setLog((l) => [`${new Date().toLocaleTimeString()}  ${s}`, ...l].slice(0, 14));
     setStats((s) => ({ ...s, mode: transport.mode }));
 
@@ -87,6 +88,7 @@ export default function BotsPage() {
     };
 
     const joinAll = () => {
+      lastJoin = Date.now();
       bots.forEach((b, i) => {
         const id = setTimeout(() => transport.send("join", b), i * 35);
         timers.add(id);
@@ -149,7 +151,8 @@ export default function BotsPage() {
         const lobby = payload as LobbyMsg;
         const present = new Set(lobby.teams.flatMap((t) => t.players.map((p) => p.id)));
         // The host was reloaded or opened late: join again.
-        if (joined && !bots.every((b) => present.has(b.playerId))) joinAll();
+        // (Not while our own joins are still arriving, or every lobby update would trigger another round.)
+        if (joined && Date.now() - lastJoin > 4000 && !bots.every((b) => present.has(b.playerId))) joinAll();
       }
     });
     const offStatus = transport.onStatus((s) => {
