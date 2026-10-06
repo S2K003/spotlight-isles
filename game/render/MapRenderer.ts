@@ -10,7 +10,7 @@ import { Ship } from "./Ships";
 import { Clouds, LIGHT, type TimeOfDay } from "./Sky";
 import { buildTile, drawOverlay, makeKey, makeStar, type TileView } from "./TileFactory";
 
-export type RenderEvent = "step" | "blocked" | "key" | "star" | "dock" | "turn" | "firework";
+export type RenderEvent = "step" | "key" | "star" | "dock" | "turn" | "firework";
 export type CameraMode = "lobby" | "intro" | "play" | "action";
 
 export interface RendererOpts {
@@ -354,8 +354,17 @@ export class MapRenderer {
       return;
     }
     this.homes = new Map(teams.map((t) => [`${t.home.q},${t.home.r}`, t.id]));
+    // Ships can share a hex, so spread out any that do.
+    const sharing = new Map<string, TeamId[]>();
+    for (const t of teams) {
+      if (t.docked !== null) continue;
+      const k = `${t.pos.q},${t.pos.r}`;
+      sharing.set(k, (sharing.get(k) ?? []).concat(t.id));
+    }
     for (const team of teams) {
       const p = this.shipSpot(team);
+      const group = team.docked === null ? (sharing.get(`${team.pos.q},${team.pos.r}`) ?? []) : [];
+      if (group.length > 1) p.x += (group.indexOf(team.id) - (group.length - 1) / 2) * 30;
       const ship = this.ships[team.id];
       ship.view.position.set(p.x, p.y);
       ship.view.zIndex = p.y;
@@ -377,12 +386,12 @@ export class MapRenderer {
 
   /**
    * Animate one round. `moves` are in move order (most points first) and are played one after
-   * another, so the room can follow each ship: fly, leave a trail, grab keys and stars, bump into
-   * a ship that got there first, or dock at the Stage.
+   * another, so the room can follow each ship: fly, leave a trail, grab its key or a star, or dock
+   * at the Stage.
    */
   playResolution(moves: MoveResult[], tilesAfter: Tile[], teamsAfter: TeamPublic[], durationMs: number): void {
     const dur = durationMs / 1000;
-    const movers = moves.filter((m) => m.path.length > 1 || m.blockedAt);
+    const movers = moves.filter((m) => m.path.length > 1);
     const slot = Math.min(2.1, (dur * 0.86) / Math.max(1, movers.length));
     const total = Math.min(dur - 0.05, slot * movers.length + 0.4);
     this.busyUntil = performance.now() + total * 1000;
@@ -446,20 +455,6 @@ export class MapRenderer {
         const end = m.path[m.path.length - 1];
         const here = this.top(`${end.q},${end.r}`);
         if (!here) return;
-        if (m.blockedAt) {
-          // Someone got there first: lunge at the taken hex and bounce back.
-          const at = this.top(`${m.blockedAt.q},${m.blockedAt.r}`);
-          if (at) {
-            const dx = (at.x - here.x) * 0.5, dy = (at.y - here.y) * 0.5;
-            const d = Math.min(0.16, slot * 0.12);
-            this.tween(ship.kick, { x: dx, y: dy, duration: d, ease: "power2.in", yoyo: true, repeat: 1 });
-            this.later(d, () => {
-              this.particles.emit(here.x + dx, here.y + dy - 30, 0xfff2a8, { count: 20, speed: 240, life: 0.45, size: 0.26, gravity: 200 });
-              this.shake(10);
-              this.emit("blocked", m.teamId);
-            });
-          }
-        }
         if (m.docked) {
           ship.view.scale.set(0.72);
           this.ring(here.x, here.y, color, 200);

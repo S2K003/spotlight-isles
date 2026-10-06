@@ -1,4 +1,4 @@
-import { FAIR_JUDGE_TOLERANCE, SPOTLIGHT_TRIM_MIN_TEAMS } from "@/config/balance";
+import { SPOTLIGHT_TRIM_MIN_TEAMS } from "@/config/balance";
 import type { Rating, SpeakerResult } from "./types";
 
 const mean = (xs: number[]): number => xs.reduce((s, x) => s + x, 0) / xs.length;
@@ -50,15 +50,3 @@ export function didRate(results: SpeakerResult[], teamId: number): boolean {
   return results.some((r) => r.teamAverages[teamId] !== undefined);
 }
 
-/**
- * Fair Judge: the team rated every pitch that received ratings, and each time its average was
- * within 0.5 stars of the room's.
- */
-export function isFairJudge(results: SpeakerResult[], teamId: number): boolean {
-  const rated = results.filter((r) => r.overall !== null);
-  if (!rated.length) return false;
-  return rated.every((r) => {
-    const mine = r.teamAverages[teamId];
-    return mine !== undefined && Math.abs(mine - (r.overall as number)) <= FAIR_JUDGE_TOLERANCE + 1e-9;
-  });
-}

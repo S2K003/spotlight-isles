@@ -282,8 +282,8 @@ export class HostController {
     this.changed();
   }
 
-  setManualBand(teamId: TeamId, band: number): void {
-    this.state.manual.bands[teamId] = band;
+  setManualPass(teamId: TeamId, pass: boolean): void {
+    this.state.manual.pass[teamId] = pass;
     this.changed();
   }
   setManualDest(teamId: TeamId, dest: string | null): void {

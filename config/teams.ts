@@ -19,12 +19,12 @@ export interface TeamDef {
  * and the emblem shape is the primary identifier on ships, tiles and the scoreboard.
  */
 export const TEAM_DEFS: TeamDef[] = [
-  { id: 0, name: "Comet", color: "#FFC21A", text: "#FFC21A", emblem: "★", shape: "star", emoji: "☄️" },
-  { id: 1, name: "Volt", color: "#8B5CF6", text: "#B9A2FF", emblem: "⚡", shape: "bolt", emoji: "⚡" },
-  { id: 2, name: "Tide", color: "#00E5FF", text: "#00E5FF", emblem: "〰", shape: "wave", emoji: "🌊" },
-  { id: 3, name: "Ember", color: "#DC2626", text: "#FF7070", emblem: "▲", shape: "triangle", emoji: "🔥" },
-  { id: 4, name: "Grove", color: "#0F766E", text: "#3DD6B0", emblem: "●", shape: "circle", emoji: "🌿" },
-  { id: 5, name: "Prism", color: "#F472B6", text: "#F9A8D4", emblem: "◆", shape: "diamond", emoji: "💎" },
+  { id: 0, name: "Group 1", color: "#FFC21A", text: "#FFC21A", emblem: "★", shape: "star", emoji: "☄️" },
+  { id: 1, name: "Group 2", color: "#8B5CF6", text: "#B9A2FF", emblem: "⚡", shape: "bolt", emoji: "⚡" },
+  { id: 2, name: "Group 3", color: "#00E5FF", text: "#00E5FF", emblem: "〰", shape: "wave", emoji: "🌊" },
+  { id: 3, name: "Group 4", color: "#DC2626", text: "#FF7070", emblem: "▲", shape: "triangle", emoji: "🔥" },
+  { id: 4, name: "Group 5", color: "#0F766E", text: "#3DD6B0", emblem: "●", shape: "circle", emoji: "🌿" },
+  { id: 5, name: "Group 6", color: "#F472B6", text: "#F9A8D4", emblem: "◆", shape: "diamond", emoji: "💎" },
 ];
 
 export const TEAM_IDS: TeamId[] = [0, 1, 2, 3, 4, 5];

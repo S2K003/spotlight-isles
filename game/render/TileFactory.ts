@@ -105,28 +105,6 @@ function decorate(tile: Tile, cx: number, cy: number): { view: Container; tick: 
     return { view, tick: null };
   }
   if (tile.type === "water") return null;
-  if (tile.type === "fog") {
-    const puffs: Graphics[] = [];
-    for (let i = 0; i < 3; i++) {
-      const p = new Graphics().ellipse(0, 0, 22 - i * 3, 11 - i * 1.5).fill({ color: 0xe9edf3, alpha: 0.5 });
-      p.position.set((i - 1) * 13, -6 - i * 6);
-      view.addChild(p);
-      puffs.push(p);
-    }
-    const um = new Text({ text: seed > 0.5 ? "um…" : "uh…", style: { fontFamily: "Nunito, sans-serif", fontSize: 13, fill: 0x59606e, fontStyle: "italic", fontWeight: "700" } });
-    um.anchor.set(0.5);
-    view.addChild(um);
-    return {
-      view,
-      tick: (t) => {
-        puffs.forEach((p, i) => { p.x = (i - 1) * 13 + Math.sin(t * 0.5 + phase + i * 2) * 8; p.alpha = 0.72 + Math.sin(t * 0.7 + i) * 0.2; });
-        const c = (t * 0.25 + seed) % 1;
-        um.y = -10 - c * 26;
-        um.x = Math.sin(t + phase) * 6;
-        um.alpha = Math.sin(c * Math.PI) * 0.75;
-      },
-    };
-  }
 
   if (seed < 0.3) return null; // leave some land bare so the map can breathe
 

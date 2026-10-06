@@ -6,11 +6,12 @@ import { SPOTLIGHT_TOPICS } from "@/content/spotlight";
 import { computeDebrief } from "./debrief";
 import { corners } from "./hex";
 import { generateMap } from "./mapgen";
-import { homesOf, indexTiles, reachable } from "./pathfinding";
+import { homesOf, indexTiles } from "./pathfinding";
 import { resolveRound } from "./resolve";
 import { pick, rngFor, shuffle } from "./rng";
-import { applyTailwind, audienceSteps, moveOrder, rankTeams, scoreManual, scoreQuestion, stepsFromPitch, type TeamAnswers } from "./scoring";
-import { clampStars, didRate, isFairJudge, speakerResult } from "./spotlight";
+import { findKey, reachableFor, suggestMove } from "./route";
+import { audienceResult, groundDocked, moveOrder, rankTeams, scoreManual, scoreQuestion, stepsFromPitch, type TeamAnswers } from "./scoring";
+import { clampStars, didRate, speakerResult } from "./spotlight";
 import { phaseIndexAt, TIMELINE, TIMELINE_TOTAL_MS } from "./timeline";
 import type {
   GameState,
@@ -29,12 +30,12 @@ import type {
   TeamRoundResult,
 } from "./types";
 
-export const STATE_VERSION = 5;
+export const STATE_VERSION = 6;
 
 export const emptyInputs = (): PhaseInputs => ({ answers: {}, votes: {}, ratings: {} });
 
 export const emptyManual = (): ManualState => ({
-  bands: [null, null, null, null, null, null],
+  pass: [null, null, null, null, null, null],
   dests: [null, null, null, null, null, null],
   stars: [null, null],
 });
@@ -72,6 +73,7 @@ export function createGame(roomCode: string, seed: number): GameState {
     questionStats: {},
     spotTotals: { hook: 0, clarity: 0, confidence: 0, n: 0 },
     pitches: [null, null, null, null, null, null],
+    pitchOrder: [],
     manualMode: false,
     manual: emptyManual(),
     results: null,
@@ -196,18 +198,14 @@ function choiceIsCorrect(state: GameState, choice: number): boolean {
 }
 
 function spotlightIndex(round: number): number {
-  return ROUNDS.slice(0, round - 1).filter((r) => r.kind === "spotlight").length;
+  return ROUNDS.slice(0, round - 1).filter((r) => r === "spotlight").length;
 }
 
-/** Add this round's points to the scores, then work out the tailwind and the move order. */
+/** Add this round's points to the scores, then work out the move order (most points first). */
 function settleRound(state: GameState, results: TeamRoundResult[]): void {
   const cur = state.cur!;
   for (const r of results) state.teams[r.teamId].score += r.points;
-  cur.teamResults = applyTailwind(
-    results,
-    state.teams,
-    state.teams.map((t) => t.score),
-  );
+  cur.teamResults = groundDocked(results, state.teams);
   cur.order = moveOrder(state.teams, rngFor(state.seed, `order:${cur.round}`));
 }
 
@@ -279,22 +277,21 @@ function scoreSpotlight(state: GameState): TeamRoundResult[] {
   return state.teams.map((team) => {
     const slot = spot.teams.indexOf(team.id);
     const members = teamMembers(state, team.id, true).length;
-    const base = { teamId: team.id, members, correct: 0, tailwind: false };
+    const base = { teamId: team.id, members, correct: 0 };
     if (slot >= 0) {
       // An unrated pitch (nobody rated, or no stars clicked in Manual Mode) counts as a solid 3.
       const overall = results[slot].overall;
       const steps = stepsFromPitch(overall ?? 3);
       return { ...base, accuracy: (overall ?? 3) / 5, steps, points: steps * POINTS.perStep, speaker: true, spotOverall: overall };
     }
-    // The audience earns its movement by marking: rate to move 2, rate fairly to move 3.
+    // The audience moves the standard distance and earns bonus points for marking the pitches.
     const rated = state.manualMode || didRate(results, team.id);
-    const fair = !state.manualMode && isFairJudge(results, team.id);
-    const steps = audienceSteps(rated, fair);
-    return { ...base, accuracy: steps / 3, steps, points: steps * POINTS.perStep, rated, fairJudge: fair };
+    return { ...base, accuracy: rated ? 1 : 0, ...audienceResult(rated), rated };
   });
 }
 
-function tally(state: GameState, votes: string[], label: string): string | null {
+/** Majority vote. A tie goes to `prefer` (the suggested move) if it is among the leaders, otherwise to a seeded draw. */
+function tally(state: GameState, votes: string[], label: string, prefer?: string): string | null {
   if (!votes.length) return null;
   const counts: Record<string, number> = {};
   for (const v of votes) counts[v] = (counts[v] ?? 0) + 1;
@@ -302,7 +299,8 @@ function tally(state: GameState, votes: string[], label: string): string | null 
   const top = Object.keys(counts)
     .filter((k) => counts[k] === max)
     .sort();
-  return top.length === 1 ? top[0] : pick(rngFor(state.seed, label), top);
+  if (top.length === 1) return top[0];
+  return prefer && top.includes(prefer) ? prefer : pick(rngFor(state.seed, label), top);
 }
 
 /* ---------- phase transitions ---------- */
@@ -322,14 +320,18 @@ function enterPhase(state: GameState): void {
       break;
     }
     case "spotReady": {
-      const def = ROUNDS[round - 1];
-      const teams = def.kind === "spotlight" ? def.teams : ([0, 1] as [TeamId, TeamId]);
+      // The spin: two teams are drawn from those that have not pitched yet, so every team pitches
+      // exactly once and nobody knows the order in advance.
+      const pool = state.teams.map((t) => t.id).filter((id) => !state.pitchOrder.includes(id));
+      const drawn = shuffle(rngFor(state.seed, `spin:${round}`), pool).slice(0, 2);
+      const teams = [drawn[0] ?? 0, drawn[1] ?? drawn[0] ?? 1] as [TeamId, TeamId];
+      state.pitchOrder.push(...drawn);
       const si = spotlightIndex(round);
       const topics = shuffle(rngFor(state.seed, "topics"), SPOTLIGHT_TOPICS);
       state.cur = {
         round,
         kind: "spotlight",
-        spot: { teams, topics: [topics[(si * 2) % topics.length], topics[(si * 2 + 1) % topics.length]], ratings: [{}, {}] },
+        spot: { pool, teams, topics: [topics[(si * 2) % topics.length], topics[(si * 2 + 1) % topics.length]], ratings: [{}, {}] },
       };
       state.manual = emptyManual();
       break;
@@ -342,9 +344,13 @@ function enterPhase(state: GameState): void {
       const index = indexTiles(state.tiles);
       const homes = homesOf(state.teams);
       cur.reach = {};
+      cur.suggest = [];
       for (const team of state.teams) {
         const steps = cur.teamResults?.[team.id].steps ?? 0;
-        cur.reach[team.id] = team.docked !== null ? [] : reachable(index, team.pos, steps, { teamId: team.id, homes, allowStage: team.hasKey });
+        const keyHex = findKey(state.tiles, team.id);
+        const flying = team.docked === null;
+        cur.reach[team.id] = flying ? reachableFor(index, team, steps, homes, keyHex) : [];
+        cur.suggest[team.id] = flying ? suggestMove(index, team, steps, homes, keyHex) : "hold";
       }
       break;
     }
@@ -400,14 +406,14 @@ function exitPhase(state: GameState): void {
     case "challenge": {
       if (!cur) break;
       const scored = scoreAnswers(state);
-      settleRound(state, state.manualMode ? scoreManual(state.manual.bands) : scored);
+      settleRound(state, state.manualMode ? scoreManual(state.manual.pass) : scored);
       break;
     }
     case "reveal":
       // Manual Mode: the facilitator may still be clicking accuracy bands while the answer is on screen.
       if (cur && state.manualMode) {
         unsettleRound(state);
-        settleRound(state, scoreManual(state.manual.bands));
+        settleRound(state, scoreManual(state.manual.pass));
       }
       break;
     case "spotRate": {
@@ -417,16 +423,16 @@ function exitPhase(state: GameState): void {
     }
     case "vote": {
       if (!cur) break;
-      if (state.manualMode) {
-        cur.dests = state.manual.dests.slice();
-        break;
-      }
+      // A team that doesn't choose flies the suggested route, so nobody is left behind.
       cur.dests = state.teams.map((team) => {
-        const votes = teamMembers(state, team.id)
-          .map((p) => state.inputs.votes[p.id]?.dest)
-          .filter((v): v is string => !!v);
-        const dest = tally(state, votes, `vote:${cur.round}:${team.id}`);
-        return dest && dest !== "hold" ? dest : null;
+        const votes = state.manualMode
+          ? []
+          : teamMembers(state, team.id)
+              .map((p) => state.inputs.votes[p.id]?.dest)
+              .filter((v): v is string => !!v);
+        const chosen = state.manualMode ? state.manual.dests[team.id] : tally(state, votes, `vote:${cur.round}:${team.id}`, cur.suggest?.[team.id]);
+        const dest = chosen ?? cur.suggest?.[team.id] ?? "hold";
+        return dest !== "hold" ? dest : null;
       });
       break;
     }
@@ -536,7 +542,7 @@ export function buildPublic(state: GameState): PublicData {
   }
   const spotPublic = (slot: 0 | 1, withResults = false): SpotPublic => {
     const s = cur!.spot!;
-    return { teams: s.teams, topics: s.topics, slot, results: withResults ? s.results : undefined };
+    return { pool: s.pool, teams: s.teams, topics: s.topics, slot, results: withResults ? s.results : undefined };
   };
 
   switch (phase.kind) {
@@ -553,6 +559,7 @@ export function buildPublic(state: GameState): PublicData {
       data.teamResults = cur?.teamResults;
       data.order = cur?.order;
       data.reach = cur?.reach;
+      data.suggest = cur?.suggest;
       break;
     case "resolve":
       data.teamResults = cur?.teamResults;

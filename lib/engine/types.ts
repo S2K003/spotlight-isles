@@ -1,5 +1,5 @@
 export type CriterionKey = "structure" | "visuals" | "delivery" | "engagement" | "timing" | "qa";
-export type TileType = "land" | "water" | "fog" | "stage" | "plaza";
+export type TileType = "land" | "water" | "stage" | "plaza";
 export type TeamId = 0 | 1 | 2 | 3 | 4 | 5;
 
 export interface Hex {
@@ -93,12 +93,9 @@ export interface TeamRoundResult {
   /** Steps this team may move this round (0 once docked at the Stage). */
   steps: number;
   points: number;
-  /** Last place gets +1 step. */
-  tailwind: boolean;
   /** Pitch rounds only. */
   speaker?: boolean;
   rated?: boolean;
-  fairJudge?: boolean;
   spotOverall?: number | null;
 }
 
@@ -119,8 +116,6 @@ export interface MoveResult {
   order: number;
   /** Final path, origin first. Length 1 means the ship did not move. */
   path: Hex[];
-  /** Set when the chosen hex was taken by a ship that moved earlier: where it wanted to land. */
-  blockedAt?: Hex;
   gotKey?: boolean;
   /** Keys of the star tiles collected on this move. */
   stars: string[];
@@ -131,6 +126,8 @@ export interface MoveResult {
 }
 
 export interface SpotState {
+  /** Teams that had not pitched before this round's spin. */
+  pool: TeamId[];
   teams: [TeamId, TeamId];
   topics: [string, string];
   ratings: [Record<string, Rating>, Record<string, Rating>];
@@ -152,14 +149,16 @@ export interface RoundWork {
   /** Move order for this round: highest score first. */
   order?: TeamId[];
   reach?: Record<number, ReachItem[]>;
+  /** The best move for each team ("q,r" or "hold"): flown automatically if the team doesn't choose. */
+  suggest?: string[];
   dests?: (string | null)[];
   moves?: MoveResult[];
   spot?: SpotState;
 }
 
 export interface ManualState {
-  /** Accuracy band per team: 0 = 0%, 1 = 1–49, 2 = 50–79, 3 = 80+. */
-  bands: (number | null)[];
+  /** Show of hands per team: did at least half get it right? null = not clicked yet (counts as yes). */
+  pass: (boolean | null)[];
   dests: (string | null)[];
   stars: [number | null, number | null];
 }
@@ -191,6 +190,8 @@ export interface GameState {
   spotTotals: { hook: number; clarity: number; confidence: number; n: number };
   /** Each team's pitch score (star average), once it has pitched. */
   pitches: (number | null)[];
+  /** Teams in the order the spin picked them to pitch. Every team appears exactly once by the end. */
+  pitchOrder: TeamId[];
   manualMode: boolean;
   manual: ManualState;
   results: ResultsData | null;
@@ -240,6 +241,8 @@ export interface TeamPublic {
 }
 
 export interface SpotPublic {
+  /** Teams that had not pitched before this round's spin (the wheel's segments). */
+  pool: TeamId[];
   teams: [TeamId, TeamId];
   topics: [string, string];
   slot: 0 | 1;
@@ -290,6 +293,7 @@ export interface PublicData {
   teamResults?: TeamRoundResult[];
   order?: TeamId[];
   reach?: Record<number, ReachItem[]>;
+  suggest?: string[];
   moves?: MoveResult[];
   spot?: SpotPublic;
   results?: ResultsData;

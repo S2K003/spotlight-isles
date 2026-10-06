@@ -58,7 +58,6 @@ const startButton = (page) => page.getByRole("button", { name: "START", exact: t
 const snapshot = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("spotlight-isles:host") ?? "null"));
 const startedAt = async (page) => (await page.waitForFunction(() => JSON.parse(localStorage.getItem("spotlight-isles:host") ?? "{}").startedAt ?? false, null, { polling: 20 })).jsonValue();
 const waitOver = (page, timeout) => page.waitForFunction(() => (document.body.innerText.includes("GAME OVER") && document.querySelector(".stamp") ? Date.now() : false), null, { timeout, polling: 20 });
-const away = (state) => state.teams.filter((t) => t.pos.q !== t.home.q || t.pos.r !== t.home.r).length;
 const summary = (state) => `scores ${state.teams.map((t) => t.score).join(", ")}; keys ${state.teams.filter((t) => t.hasKey).length}/6; at the Stage ${state.teams.filter((t) => t.docked !== null).length}/6`;
 
 async function fullGame(browser) {
@@ -84,7 +83,7 @@ async function fullGame(browser) {
   await phone.fill("#nick", "Tester");
   await phone.click("text=NEXT");
   await shot(phone, "phone-01-teams");
-  await phone.click("text=Tide");
+  await phone.click("text=Group 3");
   await phone.waitForSelector("text=Waiting for the host");
   await shot(phone, "phone-02-waiting");
 
@@ -100,10 +99,10 @@ async function fullGame(browser) {
 
   // Screenshots at interesting moments (seconds of the 15:00 clock ÷ 10).
   const marks = [
-    [1.5, "intro-title"], [3.4, "intro-rules"], [6.0, "challenge"], [8.9, "reveal"], [11.0, "vote"], [13.3, "resolve"],
-    [15.6, "pitch-prep"], [18.6, "pitch-speak"], [20.4, "pitch-rate"], [25.1, "pitch-scorecards"], [27.2, "vote-2"], [29.6, "resolve-2"],
-    [32.5, "challenge-3"], [37.5, "vote-3"], [40.1, "resolve-3"], [53.8, "vote-4"], [56.2, "resolve-4"], [64.0, "vote-5"], [66.6, "resolve-5"],
-    [80.0, "vote-6"], [82.6, "resolve-6"], [84.3, "results-count"], [85.6, "results-podium"], [86.6, "results-best"], [88.6, "debrief"],
+    [1.5, "intro-title"], [3.4, "intro-rules"], [6.0, "challenge"], [8.9, "reveal"], [9.9, "vote"], [11.3, "resolve"],
+    [12.1, "pitch-spin"], [14.5, "pitch-prep"], [18.5, "pitch-speak"], [21.1, "pitch-rate"], [27.5, "pitch-scorecards"], [28.4, "vote-2"], [29.9, "resolve-2"],
+    [32.5, "challenge-3"], [36.4, "vote-3"], [37.9, "resolve-3"], [54.9, "vote-4"], [56.4, "resolve-4"], [62.9, "vote-5"], [64.4, "resolve-5"],
+    [81.4, "vote-6"], [82.9, "resolve-6"], [84.3, "results-count"], [85.6, "results-podium"], [86.6, "results-best"], [88.6, "debrief"],
   ];
   const phoneMarks = new Set(["challenge", "reveal", "vote", "resolve", "pitch-prep", "pitch-speak", "pitch-rate", "pitch-scorecards", "vote-3", "debrief"]);
   let phoneTaps = 0;
@@ -117,7 +116,7 @@ async function fullGame(browser) {
     if (name.startsWith("challenge")) {
       await phone.locator("section button").first().click({ timeout: 300 }).then(() => phoneTaps++).catch(() => {});
     } else if (name.startsWith("vote")) {
-      await phone.locator("svg g[role='button']").first().click({ timeout: 300 }).then(() => phoneTaps++).catch(() => {});
+      await phone.locator("button:has-text('GO')").first().click({ timeout: 300 }).then(() => phoneTaps++).catch(() => {});
     }
   }
   const end = await (await overPromise).jsonValue();
@@ -130,7 +129,9 @@ async function fullGame(browser) {
   const final = await snapshot(host);
   note(final.usedQuestions.length === 3 && final.pitches.every((p) => p !== null), `3 questions asked and all 6 teams pitched (${final.usedQuestions.join(", ")})`);
   note(!!final.results && !!final.debrief, "results and debrief computed");
-  note(away(final) >= 5 && final.teams.filter((t) => t.hasKey).length >= 3, `${away(final)}/6 ships left home; ${summary(final)}`);
+  // A few bots deliberately vote for other hexes, so an occasional group can talk itself off the route.
+  note(final.teams.filter((t) => t.docked !== null).length >= 4, `most groups reached the Stage; ${summary(final)}`);
+  note(final.pitchOrder.slice().sort().join("") === "012345", `the spin gave every group one pitch, in the order ${final.pitchOrder.map((t) => t + 1).join(", ")}`);
   const players = Object.values(final.players);
   const answered = players.reduce((s, p) => s + p.stats.answered, 0);
   const ratings = players.reduce((s, p) => s + p.stats.ratings, 0);
@@ -198,22 +199,13 @@ async function manualMode(browser) {
     if (await panel.count()) {
       const title = await panel.innerText().catch(() => "");
       if (/got it right|Hands up/.test(title)) {
-        for (const label of ["Most", "About half", "A few"]) {
-          const b = panel.locator(`button:has-text("${label}")`);
-          const n = await b.count();
-          if (n) await b.nth(Math.floor(Math.random() * n)).click({ timeout: 200 }).then(() => clicks++).catch(() => {});
-        }
+        const b = panel.locator("button:has-text('got it'), button:has-text('Fewer')");
+        const n = await b.count();
+        for (let i = 0; i < 3 && n; i++) await b.nth(Math.floor(Math.random() * n)).click({ timeout: 200 }).then(() => clicks++).catch(() => {});
         if (/got it right/.test(title) && !shots.has("bands")) { shots.add("bands"); await shot(host, "manual-bands"); }
-      } else if (/destination/.test(title)) {
-        const tabs = panel.locator("button:has(svg)");
-        const n = Math.min(6, await tabs.count());
-        for (let i = 0; i < n; i++) {
-          await tabs.nth(i).click({ timeout: 200 }).catch(() => {});
-          const hexes = panel.locator("svg g[role='button']");
-          const h = await hexes.count();
-          if (h) await hexes.nth(Math.floor(Math.random() * h)).click({ timeout: 200 }).then(() => clicks++).catch(() => {});
-          if (i === 1 && !shots.has("vote")) { shots.add("vote"); await shot(host, "manual-vote"); }
-        }
+      } else if (/Optional/.test(title)) {
+        // The operator leaves the ships on autopilot; just look at the panel once.
+        if (!shots.has("vote")) { shots.add("vote"); await shot(host, "manual-vote"); }
       } else if (/star rating/.test(title)) {
         await panel.locator("button:has-text('★')").nth(3).click({ timeout: 200 }).then(() => clicks++).catch(() => {});
         await panel.locator("button:has-text('★')").nth(9).click({ timeout: 200 }).catch(() => {});
@@ -225,7 +217,7 @@ async function manualMode(browser) {
   const end = await (await overPromise).jsonValue();
   const final = await snapshot(host);
   note(Math.abs((end - start) / 1000 - 150) <= 0.5, `ended after ${((end - start) / 1000).toFixed(2)} s (target 150.00)`);
-  note(clicks > 20 && away(final) >= 3, `${clicks} operator clicks; ${away(final)}/6 ships left home; ${summary(final)}`);
+  note(clicks > 8 && final.teams.every((t) => t.docked !== null), `${clicks} operator clicks; ships flew themselves and every group reached the Stage; ${summary(final)}`);
   note(final.debrief?.takeaways.length === 3, "debrief produced with no phones");
   note(errors.length === 0, `console clean (${errors.length} errors)`);
   for (const e of errors.slice(0, 8)) console.log("      " + e);

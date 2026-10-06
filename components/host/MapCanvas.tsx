@@ -19,7 +19,7 @@ function insetsFor(kind: Kind) {
   if (kind === "lobby" || kind === "results" || kind === "debrief" || kind === "over") return { left: 0, right: 0, top: 0, bottom: 0 };
   if (kind === "intro") return { left: 0, right: 0, top: 60, bottom: 0 };
   const moving = kind === "vote" || kind === "resolve";
-  const bottom = moving ? 190 : kind === "reveal" ? 500 : kind.startsWith("spot") ? 400 : 390;
+  const bottom = moving ? 190 : kind === "reveal" ? 500 : kind === "spotReady" ? 470 : kind.startsWith("spot") ? 400 : 390;
   // During the vote and the moves the legend sits on the left, so the map shifts right to clear it.
   return { left: moving ? 330 : 20, right: 440, top: 130, bottom };
 }

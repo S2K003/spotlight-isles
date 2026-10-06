@@ -19,6 +19,8 @@ interface Props {
   /** destination → votes from my team */
   tally: Record<string, number>;
   selected: string | null;
+  /** The recommended hex: drawn with a bold green outline and a tick. */
+  suggested?: string | null;
   onSelect: (key: string) => void;
   /** Projector (Manual Mode) uses a wider view. */
   radius?: number;
@@ -26,7 +28,7 @@ interface Props {
 }
 
 /** Zoomed mini-map centred on the team's ship. Reachable hexes are highlighted and tappable. */
-export function VoteMap({ tiles, teams, teamId, reach, tally, selected, onSelect, radius, className }: Props) {
+export function VoteMap({ tiles, teams, teamId, reach, tally, selected, suggested, onSelect, radius, className }: Props) {
   const me = teams[teamId];
   const reachMap = useMemo(() => new Map(reach.map((r) => [r.key, r.cost])), [reach]);
 
@@ -72,7 +74,6 @@ export function VoteMap({ tiles, teams, teamId, reach, tally, selected, onSelect
             <polygon points={hexPoints(c.x, c.y, SIZE - 1.5, SQ)} fill={toCss(col.top)} stroke={toCss(col.side)} strokeWidth="2" />
             {owner && <polygon points={hexPoints(c.x, c.y, SIZE - 7, SQ)} fill={owner.color} fillOpacity="0.35" />}
             {t.type === "water" && <path d={`M${c.x - 12} ${c.y} q6 -6 12 0 t12 0`} stroke="#dff5ff" strokeWidth="2.5" fill="none" />}
-            {t.type === "fog" && <text x={c.x} y={c.y + 5} textAnchor="middle" fontSize="15">☁️</text>}
             {t.type === "stage" && <text x={c.x} y={c.y + 6} textAnchor="middle" fontSize="18">🎤</text>}
             {t.star && <text x={c.x} y={c.y + 6} textAnchor="middle" fontSize="17">⭐</text>}
             {t.key !== undefined && (
@@ -90,8 +91,11 @@ export function VoteMap({ tiles, teams, teamId, reach, tally, selected, onSelect
                 strokeDasharray={isSel ? undefined : "5 4"}
               />
             )}
-            {can && t.type === "fog" && (
-              <text x={c.x + 13} y={c.y - 10} textAnchor="middle" fontSize="10" fontWeight="900" fill="#fff" stroke="#111" strokeWidth="2.5" paintOrder="stroke">×2</text>
+            {suggested === k && !isSel && (
+              <g>
+                <polygon points={hexPoints(c.x, c.y, SIZE - 3, SQ)} fill="rgba(52,211,153,0.35)" stroke="#34d399" strokeWidth="4.5" />
+                <text x={c.x} y={c.y - 9} textAnchor="middle" fontSize="12" fontWeight="900" fill="#fff" stroke="#064e3b" strokeWidth="3" paintOrder="stroke">BEST</text>
+              </g>
             )}
             {ship && (
               <g>

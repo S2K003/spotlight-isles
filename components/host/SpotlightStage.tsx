@@ -5,9 +5,36 @@ import { SPOTLIGHT_CRITERIA } from "@/config/rubric";
 import { TEAM_DEFS } from "@/config/teams";
 import { PITCH_RECIPE } from "@/content/spotlight";
 import { Emblem } from "@/components/shared/Emblem";
-import type { PublicData, SpeakerResult } from "@/lib/engine/types";
+import type { PublicData, SpeakerResult, TeamId } from "@/lib/engine/types";
 import type { HostView } from "@/lib/net/host";
 import { TeamPips } from "./Hud";
+
+/** One slot of the spin: cycles through the groups still waiting to pitch, then lands on the chosen one. */
+function SpinSlot({ pool, chosen, locked, names, onTick }: { pool: TeamId[]; chosen: TeamId; locked: boolean; names: string[]; onTick: () => void }) {
+  const [shown, setShown] = useState<TeamId>(pool[0] ?? chosen);
+  useEffect(() => {
+    if (locked || pool.length < 2) return;
+    let i = Math.floor(Math.random() * pool.length);
+    const id = setInterval(() => {
+      i = (i + 1) % pool.length;
+      setShown(pool[i]);
+      onTick();
+    }, 110);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locked, pool.join(",")]);
+  const id = locked ? chosen : shown;
+  return (
+    <div className="flex items-center justify-center gap-4 rounded-2xl px-5 py-3" style={{ background: locked ? `${TEAM_DEFS[id].color}55` : "rgba(0,0,0,.45)", outline: locked ? `5px solid ${TEAM_DEFS[id].color}` : "none" }}>
+      <span key={locked ? "final" : id} className={locked ? "pop flex items-center gap-4" : "flex items-center gap-4"}>
+        <Emblem teamId={id} size={76} />
+        <span className="font-display text-[72px] leading-none" style={{ color: locked ? TEAM_DEFS[id].text : "#fff" }}>
+          {names[id]}
+        </span>
+      </span>
+    </div>
+  );
+}
 
 function Bars() {
   return (
@@ -29,9 +56,7 @@ function Scorecard({ teamId, teamName, res, steps }: { teamId: number; teamName:
         </div>
         <div className="text-right">
           <div className="font-display text-[60px] leading-none text-gold">{res.overall === null ? "—" : res.overall.toFixed(1)}★</div>
-          <div className="pop rounded-lg bg-gold px-2 text-center font-display text-[26px] text-ink">
-            {steps} {steps === 1 ? "step" : "steps"}
-          </div>
+          <div className="pop rounded-lg bg-gold px-2 text-center font-display text-[26px] text-ink">{steps} steps</div>
         </div>
       </div>
       {SPOTLIGHT_CRITERIA.map((c, i) => {
@@ -53,12 +78,14 @@ function Scorecard({ teamId, teamName, res, steps }: { teamId: number; teamName:
 interface Props {
   view: HostView;
   data: PublicData;
+  frac: number;
   seconds: number;
   progress: { done: number; total: number }[];
+  onSpinTick: () => void;
 }
 
 /** The stage view that replaces the bottom area during pitch rounds. */
-export function SpotlightStage({ view, data, seconds, progress }: Props) {
+export function SpotlightStage({ view, data, frac, seconds, progress, onSpinTick }: Props) {
   const spot = data.spot;
   const kind = view.phase?.kind;
   // Scorecard bars animate from 0: flip a flag just after mount.
@@ -70,42 +97,49 @@ export function SpotlightStage({ view, data, seconds, progress }: Props) {
   }, [view.phase?.id]);
   if (!spot || !kind) return null;
 
+  const names = data.teams.map((t) => t.name);
   const slot = spot.slot;
   const team = data.teams[spot.teams[slot]];
 
   if (kind === "spotReady") {
+    // The first few seconds are the spin; then the topics appear and the groups prepare.
+    const spinning = frac < 0.09;
+    const done = data.teams.filter((t) => !spot.pool.includes(t.id));
     return (
       <div className="glossy absolute bottom-5 left-5 right-[440px] rounded-3xl px-8 py-5">
         <div className="flex items-center gap-4">
-          <span className="font-display text-[46px] text-gold">🎤 PITCH ROUND</span>
-          <span className="rounded-full bg-black/40 px-4 py-1 font-display text-[38px]">{seconds}s to prepare</span>
+          <span className="font-display text-[46px] text-gold">{spinning ? "🎡 WHO PITCHES THIS ROUND?" : "🎤 YOUR TOPICS — PREPARE!"}</span>
+          {!spinning && <span className="rounded-full bg-black/40 px-4 py-1 font-display text-[38px]">{seconds}s to prepare</span>}
+          <span className="ml-auto text-[24px] font-bold text-white/65">
+            Every group pitches once.{done.length > 0 ? ` Already pitched: ${done.map((t) => t.name).join(", ")}.` : ""}
+          </span>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-5">
           {[0, 1].map((s) => {
             const t = data.teams[spot.teams[s]];
             return (
-              <div key={s} className="rounded-2xl bg-black/35 px-5 py-3" style={{ borderLeft: `8px solid ${t.color}` }}>
-                <div className="flex items-center gap-3">
-                  <Emblem teamId={t.id} size={46} />
-                  <span className="font-display text-[38px]" style={{ color: TEAM_DEFS[t.id].text }}>
-                    {t.name}
-                  </span>
-                  <span className="text-[26px] font-bold text-white/65">pitches {s === 0 ? "1st" : "2nd"}</span>
-                </div>
-                <div className="mt-1 text-[24px] font-extrabold uppercase tracking-wider text-white/55">Your topic is on your phones</div>
-                <div className="text-[28px] font-extrabold leading-snug">Choose one speaker. Plan 25 seconds together.</div>
+              <div key={s}>
+                <SpinSlot pool={spot.pool} chosen={spot.teams[s]} locked={!spinning} names={names} onTick={onSpinTick} />
+                {!spinning && (
+                  <div className="pop mt-2 rounded-2xl bg-black/40 px-5 py-3" style={{ borderLeft: `8px solid ${t.color}` }}>
+                    <div className="text-[22px] font-extrabold uppercase tracking-wider text-white/60">Pitches {s === 0 ? "first" : "second"} · topic</div>
+                    <div className="font-display text-[36px] leading-[1.1]">{spot.topics[s]}</div>
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
-        <div className="mt-3 flex items-center gap-4 text-[27px] font-bold">
-          <span className="text-white/70">Everyone else, you&apos;ll mark:</span>
-          {PITCH_RECIPE.map(([label, hint]) => (
-            <span key={label} className="rounded-xl bg-black/35 px-3 py-1">
-              <span className="font-display text-gold">{label}</span> <span className="text-white/75">{hint}</span>
-            </span>
-          ))}
-        </div>
+        {!spinning && (
+          <div className="mt-3 flex items-center gap-3 text-[26px] font-bold">
+            <span className="text-white/75">Choose one speaker. Plan 40 seconds:</span>
+            {PITCH_RECIPE.map(([label, hint]) => (
+              <span key={label} className="rounded-xl bg-black/35 px-3 py-1">
+                <span className="font-display text-gold">{label}</span> <span className="text-white/75">{hint}</span>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -126,7 +160,7 @@ export function SpotlightStage({ view, data, seconds, progress }: Props) {
                 🎤 {team.name}
               </div>
             </div>
-            <div className="mt-3 text-[26px] font-extrabold uppercase tracking-widest text-white/60">Their pitch</div>
+            <div className="mt-3 text-[26px] font-extrabold uppercase tracking-widest text-white/60">Topic</div>
             <div className="font-display text-[50px] leading-[1.05]">{spot.topics[slot]}</div>
           </div>
           <Bars />
@@ -150,7 +184,7 @@ export function SpotlightStage({ view, data, seconds, progress }: Props) {
             </div>
           ))}
         </div>
-        <div className="mt-2 text-[26px] font-bold text-white/75">1–5 stars on your phone. Marking earns your team 2 steps. Marking fairly (close to the room&apos;s average) earns 3.</div>
+        <div className="mt-2 text-[26px] font-bold text-white/75">1–5 stars on your phone. Marking the pitches earns your group 10 bonus points.</div>
         {!data.manualMode && <TeamPips teams={data.teams} progress={progress} label="Marks in" />}
       </div>
     );

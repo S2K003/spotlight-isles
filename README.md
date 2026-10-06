@@ -4,13 +4,15 @@ A 15-minute, 6-team game about presentation skills, built for the GSOE9010 Week 
 
 ## How to play
 
-1. **Goal:** fly your airship to your team's 🔑 key, then to the 🎤 Keynote Stage in the middle. Your key is on the opposite island.
-2. **Each round** your team earns 1–3 steps, then agrees where to fly.
-   - *Question rounds (1, 3, 5):* discuss a scenario about presenting research for 45 seconds and tap the answer you agree on. The bigger the share of your team that is right, the more steps.
-   - *Pitch rounds (2, 4, 6):* two teams get 30 seconds to choose a speaker and plan, then pitch for 25 seconds each. The other teams mark Hook, Clarity and Confidence. Good pitches earn steps; so does marking fairly. Every team pitches once.
-3. **Ships move one at a time, most points first.** You can't land on another ship. Last place gets one extra step.
-4. **The map:** water blocks, fog costs 2 steps, a ⭐ is worth 10 points to the first team over it.
-5. **Most points wins.** Points come from steps earned, your key, stars, and reaching the Stage early (50 / 40 / 30 / 20).
+1. **The goal:** fly your airship to your group's 🔑 key (on the opposite island), then to the 🎤 Keynote Stage in the middle.
+2. **Every round every group moves 2 steps.** Do well and you move 3.
+   - *Question rounds (1, 3, 5):* discuss a scenario about presenting research for 45 seconds and tap the answer you agree on. If half the group or more picks the best answer, you move 3.
+   - *Pitch rounds (2, 4, 6):* a spin picks two groups that haven't pitched yet. Each gets a topic on the big screen, 48 seconds to choose a speaker and prepare, and 40 seconds to speak. The other groups mark Hook, Clarity and Confidence. A good pitch moves 3, a great one 4. Every group pitches exactly once.
+3. **Moving is one tap.** The phone shows the best hex in green; tap GO (or pick another). A group that doesn't choose still flies the best route.
+4. **The group with the most points moves first.** Ships never block each other; going first only matters for ⭐ stars and for arriving first.
+5. **Most points wins.** Points come from steps earned, marking pitches, your key, stars, and reaching the Stage early (50 / 40 / 30 / 20 / 10).
+
+The route is 11–12 steps on every map and everyone moves at least 2 a round, so a group that keeps tapping GO always reaches the Stage by round 6. Groups that answer and pitch well arrive in round 4 or 5.
 
 - `/` — landing page: join with a 4-letter code, or host
 - `/host` — projector screen (lobby → game → results → debrief). Runs the game engine.

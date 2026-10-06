@@ -21,7 +21,7 @@ export function rotate(h: Hex, times = 1): Hex {
 }
 
 /**
- * Design one wedge (home, water, fog, a key and a star) and rotate it six times, so every team
+ * Design one wedge (home, water, a key and a star) and rotate it six times, so every team
  * faces exactly the same journey. Returns null if the layout breaks a rule.
  */
 function buildCandidate(rng: Rng): Tile[] | null {
@@ -40,15 +40,13 @@ function buildCandidate(rng: Rng): Tile[] | null {
   };
   // Nothing blocks the tiles right next to home.
   const water = take(WEDGE.water, (h) => !nearHome.has(key(h)));
-  const fog = take(WEDGE.fog, (h) => !nearHome.has(key(h)));
   const keys = take(WEDGE.keys, () => true);
   const stars = take(WEDGE.stars, () => true);
-  if (water.length < WEDGE.water || fog.length < WEDGE.fog || keys.length < WEDGE.keys || stars.length < WEDGE.stars) return null;
+  if (water.length < WEDGE.water || keys.length < WEDGE.keys || stars.length < WEDGE.stars) return null;
 
-  const mark = new Map<string, "water" | "fog" | "key" | "star">();
+  const mark = new Map<string, "water" | "key" | "star">();
   for (let w = 0; w < 6; w++) {
     for (const h of water) mark.set(key(rotate(h, w)), "water");
-    for (const h of fog) mark.set(key(rotate(h, w)), "fog");
     for (const h of keys) mark.set(key(rotate(h, w)), "key");
     for (const h of stars) mark.set(key(rotate(h, w)), "star");
   }
@@ -59,7 +57,7 @@ function buildCandidate(rng: Rng): Tile[] | null {
     const d = ring(h);
     const region = regionOf(h);
     const m = mark.get(key(h));
-    const type = d === 0 ? "stage" : d === 1 ? "plaza" : m === "water" ? "water" : m === "fog" ? "fog" : "land";
+    const type = d === 0 ? "stage" : d === 1 ? "plaza" : m === "water" ? "water" : "land";
     const base = d === 0 ? 30 : d === 1 ? 18 : RUBRIC[region as CriterionKey].height;
     const jitterKey = `${d}:${key(rotate(h, 6 - wedgeOf(h)))}`;
     if (!heightOf.has(jitterKey)) heightOf.set(jitterKey, rng() * 6);
@@ -92,7 +90,7 @@ export function isConnected(tiles: Tile[]): boolean {
   return tiles.every((t) => !walkable(t) || seen.has(key(t)));
 }
 
-/** Fewest steps for a team to fly home → its own key → the Stage (fog counts double). */
+/** Fewest steps for a team to fly home → its own key → the Stage (water has to be flown around). */
 export function routeLength(tiles: Tile[], teamId: TeamId): number {
   const index = indexTiles(tiles);
   const homes = homeHexes();

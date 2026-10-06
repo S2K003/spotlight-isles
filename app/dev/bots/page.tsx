@@ -3,10 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { TEAM_DEFS } from "@/config/teams";
 import { QUESTION_BY_ID } from "@/content/questions";
-import { distance, parseKey } from "@/lib/engine/hex";
 import { normalizeRoomCode } from "@/lib/engine/rng";
-import type { PublicQuestion, TeamId, Tile } from "@/lib/engine/types";
-import type { LobbyMsg, MapMsg, PhaseMsg, PlayerInfo } from "@/lib/net/messages";
+import type { PublicQuestion, TeamId } from "@/lib/engine/types";
+import type { LobbyMsg, PhaseMsg, PlayerInfo } from "@/lib/net/messages";
 import { createTransport, type Transport } from "@/lib/net/transport";
 
 const NAMES = ["Ada", "Bo", "Cy", "Dee", "Eli", "Fay", "Gus", "Hana", "Ivo", "Jun", "Kai", "Lux", "Mo", "Nia", "Oz", "Pia", "Quin", "Rae", "Sol", "Tao", "Uma", "Vik", "Wren", "Xan", "Yui", "Zed"];
@@ -65,7 +64,6 @@ export default function BotsPage() {
     let lastPhase = "";
     let joined = false;
     let lastJoin = 0;
-    let tiles: Tile[] = [];
     const say = (s: string) => setLog((l) => [`${new Date().toLocaleTimeString()}  ${s}`, ...l].slice(0, 14));
     setStats((s) => ({ ...s, mode: transport.mode }));
 
@@ -114,15 +112,12 @@ export default function BotsPage() {
       } else if (p.kind === "vote" && d.reach) {
         for (let team = 0; team < 6; team++) {
           const reach = d.reach[team] ?? [];
-          const me = d.teams[team];
-          // Sensible crews: fly toward their own key, then toward the Stage.
-          const keyTile = tiles.find((t) => t.key === team);
-          const target = me.hasKey || !keyTile ? { q: 0, r: 0 } : keyTile;
-          const best = reach.slice().sort((a, b) => distance(parseKey(a.key), target) - distance(parseKey(b.key), target))[0];
-          const consensus = best && distance(parseKey(best.key), target) < distance(me.pos, target) ? best.key : "hold";
+          // Most members tap GO (the suggested move); some don't vote at all; a few pick another hex.
+          const consensus = d.suggest?.[team] ?? "hold";
           for (const b of bots.filter((x) => x.teamId === team)) {
+            if (Math.random() < 0.3) continue;
             soon(p.endsInMs, () => {
-              const rebel = reach.length && Math.random() < 0.15;
+              const rebel = reach.length && Math.random() < 0.05;
               const destination = rebel ? reach[Math.floor(Math.random() * reach.length)].key : consensus;
               transport.send("vote", { playerId: b.playerId, phaseId: p.phaseId, destination });
               setStats((s) => ({ ...s, votes: s.votes + 1 }));
@@ -147,7 +142,6 @@ export default function BotsPage() {
 
     const offMsg = transport.on((event, payload) => {
       if (event === "phase") onPhase(payload as PhaseMsg);
-      else if (event === "map") tiles = (payload as MapMsg).tiles;
       else if (event === "lobby") {
         const lobby = payload as LobbyMsg;
         const present = new Set(lobby.teams.flatMap((t) => t.players.map((p) => p.id)));
@@ -178,7 +172,7 @@ export default function BotsPage() {
     <main className="mx-auto max-w-2xl px-5 py-8">
       <h1 className="font-display text-4xl text-gold">Bot simulator</h1>
       <p className="mt-1 font-bold text-white/70">
-        Spawns fake players that join teams round-robin, answer as teams, fly toward their key and the Stage, and mark pitches. Open <code>/host</code> first, then start the bots. Keep this tab in its own visible window for realistic timing.
+        Spawns fake players that join teams round-robin, answer as groups, mostly tap GO, and mark pitches. Open <code>/host</code> first, then start the bots. Keep this tab in its own visible window for realistic timing.
       </p>
 
       <div className="glossy mt-5 grid grid-cols-3 gap-4 rounded-3xl p-5">

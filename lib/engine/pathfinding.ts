@@ -1,4 +1,3 @@
-import { TILE_COST } from "@/config/balance";
 import { DIRS, key, parseKey } from "./hex";
 import type { Hex, ReachItem, TeamId, Tile } from "./types";
 
@@ -22,10 +21,10 @@ export interface MoveRules {
 export function enterCost(tile: Tile | undefined, rules: MoveRules): number {
   if (!tile) return Infinity;
   if (tile.type === "water") return Infinity;
-  if (tile.type === "stage") return rules.allowStage ? TILE_COST.stage : Infinity;
+  if (tile.type === "stage") return rules.allowStage ? 1 : Infinity;
   const homeOf = rules.homes[`${tile.q},${tile.r}`];
   if (homeOf !== undefined && homeOf !== rules.teamId) return Infinity;
-  return TILE_COST[tile.type];
+  return 1;
 }
 
 interface Node {

@@ -228,12 +228,11 @@ function Earned({ data, teamId }: { data: PublicData; teamId: TeamId }) {
   return (
     <div className="glossy mt-4 rounded-2xl p-4 text-center">
       <p className="font-bold text-white/85">
-        {r.speaker ? "Your pitch earned" : r.fairJudge ? "⚖️ Fair marking! You earned" : r.rated === false ? "No marks sent, so only" : r.rated ? "For marking the pitches" : `Your team: ${r.correct}/${r.members} correct`}
+        {r.speaker ? "Your pitch earned" : r.rated === false ? "This round you move" : r.rated ? "Thanks for marking! You move" : `Your group: ${r.correct}/${r.members} chose the best answer`}
       </p>
       <p className="font-display text-4xl text-gold">
-        {r.steps} {r.steps === 1 ? "step" : "steps"} <span className="text-2xl text-emerald-300">+{r.points} pts</span>
+        {r.steps} steps <span className="text-2xl text-emerald-300">+{r.points} pts</span>
       </p>
-      {r.tailwind && <p className="text-sm font-extrabold text-sky-300">🌬️ Tailwind: +1 step for being in last place</p>}
       {team.order !== null && <p className="mt-1 text-sm font-extrabold text-white/70">You move {ORDINAL[team.order]} this round</p>}
     </div>
   );
@@ -288,9 +287,9 @@ function PhaseBody({ client, view, data, teamId, reduce }: { client: GameClient;
         <div className="flex flex-1 flex-col justify-center gap-3">
           <BigScreen teamId={teamId} text="Here we go!" sub="Sit with your team. This game is all about talking it through." />
           {[
-            ["🔑", "Find your key, reach the Stage", "Your key is on the opposite island. Then fly to the middle."],
-            ["💬", "Talk first, then tap", "Discuss the question or plan your pitch. No rush."],
-            ["🥇", "Most points moves first", "Ships move one at a time. You can't land on another ship."],
+            ["🎯", "Goal: reach the Stage", "Fly to your key on the opposite island, then to the middle."],
+            ["💬", "Talk and pitch to move", "Every round you move 2 steps. Do well and you move 3."],
+            ["🎡", "Every group pitches once", "A spin picks who. You get a topic and time to prepare."],
           ].map(([icon, title, text]) => (
             <div key={title} className="glossy flex items-center gap-3 rounded-2xl p-3">
               <span className="text-3xl">{icon}</span>
@@ -345,9 +344,7 @@ function PhaseBody({ client, view, data, teamId, reduce }: { client: GameClient;
           ? `🎤 You reached the Stage ${ORDINAL[move.docked - 1]}! +${move.bonus} points`
           : move.gotKey
             ? "🔑 You found your key! Now head for the Stage."
-            : move.blockedAt
-              ? "💥 Another ship got there first, so you stopped one hex short."
-              : move.stars.length
+            : move.stars.length
                 ? "⭐ You grabbed a star! +10"
                 : move.path.length > 1
                   ? "Your ship is on the move."
@@ -370,12 +367,12 @@ function PhaseBody({ client, view, data, teamId, reduce }: { client: GameClient;
         if (mySlot >= 0) {
           return (
             <div className="flex flex-1 flex-col">
-              <p className="text-center font-display text-3xl text-gold">🎤 Your team pitches {mySlot === 0 ? "FIRST" : "SECOND"}</p>
+              <p className="text-center font-display text-3xl text-gold">🎡 The spin picked you! You pitch {mySlot === 0 ? "FIRST" : "SECOND"}</p>
               <div className="glossy mt-3 rounded-3xl p-4">
                 <p className="text-xs font-extrabold uppercase tracking-widest text-white/60">Your topic</p>
                 <p className="text-2xl font-extrabold leading-snug">{spot.topics[mySlot]}</p>
               </div>
-              <p className="mt-3 text-center text-base font-extrabold">Choose ONE speaker. Plan 25 seconds together:</p>
+              <p className="mt-3 text-center text-base font-extrabold">Choose ONE speaker. Plan 40 seconds together:</p>
               <div className="mt-2 grid gap-2">
                 {PITCH_RECIPE.map(([label, hint], i) => (
                   <div key={label} className="glossy flex items-center gap-3 rounded-xl px-3 py-2">
@@ -394,8 +391,9 @@ function PhaseBody({ client, view, data, teamId, reduce }: { client: GameClient;
           <div className="flex flex-1 flex-col justify-center text-center">
             <p className="font-display text-3xl text-gold">🎤 Pitch round</p>
             <p className="mt-2 text-lg font-bold text-white/85">
-              {data.teams[spot.teams[0]].name} and {data.teams[spot.teams[1]].name} are preparing a 25-second pitch.
+              {data.teams[spot.teams[0]].name} and {data.teams[spot.teams[1]].name} are preparing a 40-second pitch.
             </p>
+            <p className="mt-1 text-sm font-bold text-white/65">{spot.pool.includes(teamId) ? "Your group's turn is still to come." : "Your group has already pitched."}</p>
             <p className="mt-4 text-base font-extrabold">While you wait, agree as a team: what makes a pitch great?</p>
             <div className="mt-2 grid gap-2 text-left">
               {SPOTLIGHT_CRITERIA.map((c) => (
@@ -404,7 +402,7 @@ function PhaseBody({ client, view, data, teamId, reduce }: { client: GameClient;
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-sm font-bold text-white/65">Marking earns you 2 steps. Marking fairly earns 3.</p>
+            <p className="mt-3 text-sm font-bold text-white/65">Marking the pitches earns your group 10 bonus points.</p>
           </div>
         );
       }
@@ -518,22 +516,22 @@ function Vote({ client, view, data, teamId }: { client: GameClient; view: Client
   const reach = data.reach?.[teamId] ?? [];
   const team = data.teams[teamId];
   const dest = view.sent.vote ?? null;
+  const best = data.suggest?.[teamId] ?? "hold";
 
   if (team.docked !== null) return <BigScreen teamId={teamId} text="🎤 You're at the Stage!" sub="Keep answering and pitching: every point still counts." />;
   if (!view.tiles) return <BigScreen teamId={teamId} text="Loading map…" />;
   return (
     <div className="flex flex-1 flex-col">
       <p className="text-center font-display text-2xl">
-        {team.steps ?? 0} {team.steps === 1 ? "step" : "steps"}
+        You have {team.steps ?? 0} steps
         {team.order !== null && <span className="text-base text-white/70"> · you move {ORDINAL[team.order]}</span>}
       </p>
-      <p className="text-center text-sm font-extrabold text-gold">{team.hasKey ? "🔑 Got your key! Head for the 🎤 Stage in the middle." : "First fly to your 🔑 key (the big one in your colour)."}</p>
-      <p className="text-center text-xs font-bold text-white/60">Agree with your team, then tap a glowing hex. Dots show your teammates&apos; votes.</p>
-      <VoteMap tiles={view.tiles} teams={data.teams} teamId={teamId} reach={reach} tally={view.tally} selected={dest && dest !== "hold" ? dest : null} onSelect={(k) => client.vote(k)} radius={8} className="mx-auto my-1 max-h-[52dvh] min-h-[40dvh] w-full" />
-      <button className="btn w-full text-lg text-white" style={{ background: dest === "hold" ? "#7c3aed" : "#334155", outline: dest === "hold" ? "3px solid #ffd54a" : "none" }} onClick={() => client.vote("hold")}>
-        ⚓ Stay here{view.tally.hold ? ` · ${view.tally.hold} vote${view.tally.hold > 1 ? "s" : ""}` : ""}
+      <p className="text-center text-sm font-extrabold text-gold">{team.hasKey ? "🔑 Got your key! Now fly to the 🎤 Stage." : "Goal: your 🔑 key first, then the 🎤 Stage."}</p>
+      <button className="btn mt-2 w-full bg-emerald-400 text-2xl text-ink" style={{ outline: dest === best ? "4px solid #fff" : "none" }} onClick={() => client.vote(best)}>
+        {dest === best ? "✓ GO — best move chosen" : best === "hold" ? "✓ Stay here (best move)" : "✈ GO — take the best move"}
       </button>
-      {dest && <p className="mt-2 text-center text-sm font-extrabold text-emerald-300">Vote in ✓ — you can change it until time runs out</p>}
+      <VoteMap tiles={view.tiles} teams={data.teams} teamId={teamId} reach={reach} tally={view.tally} selected={dest && dest !== "hold" ? dest : null} suggested={best} onSelect={(k) => client.vote(k)} radius={8} className="mx-auto my-1 max-h-[46dvh] min-h-[36dvh] w-full" />
+      <p className="text-center text-xs font-bold text-white/60">The green hex is the best move. Tap GO, or tap another glowing hex. If your group doesn&apos;t choose, the ship takes the best move by itself.</p>
     </div>
   );
 }

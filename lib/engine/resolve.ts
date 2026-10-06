@@ -1,7 +1,8 @@
 import { POINTS } from "@/config/balance";
 import { key, parseKey } from "./hex";
-import { homesOf, indexTiles, shortestPath } from "./pathfinding";
-import type { Hex, MoveResult, Team, TeamId, Tile } from "./types";
+import { homesOf, indexTiles } from "./pathfinding";
+import { findKey, planPath } from "./route";
+import type { MoveResult, Team, TeamId, Tile } from "./types";
 
 export interface ResolveInput {
   tiles: Tile[];
@@ -27,11 +28,10 @@ const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v));
 
 /**
  * Resolve one round. Ships move ONE AT A TIME in `order` (most points first):
- *  - a ship flies the shortest path to its team's chosen hex;
- *  - it can't land on a hex another ship is sitting on, so it stops one hex short (the Stage is
- *    the exception: any number of ships can dock there);
- *  - flying over your own key picks it up; flying over a star takes it;
- *  - landing on the Stage docks the ship and pays the arrival bonus.
+ *  - a ship flies to its team's chosen hex, over its own key on the way if it can;
+ *  - ships never block each other: any number can share a hex;
+ *  - flying over your own key picks it up; flying over a star takes it (so moving first helps);
+ *  - landing on the Stage docks the ship and pays the arrival bonus (earlier is worth more).
  * Pure and deterministic. Moves are returned in the order they happened.
  */
 export function resolveRound(input: ResolveInput): ResolveOutput {
@@ -50,14 +50,8 @@ export function resolveRound(input: ResolveInput): ResolveOutput {
     const steps = input.steps[teamId] ?? 0;
     if (team.docked !== null || !dest || steps <= 0 || dest === key(team.pos)) return;
 
-    const path = shortestPath(index, team.pos, parseKey(dest), steps, { teamId, homes, allowStage: team.hasKey });
+    const path = planPath(index, team, parseKey(dest), steps, homes, findKey(tiles, teamId));
     if (!path) return;
-
-    // Where is everyone else right now? Earlier movers are already at their new hex.
-    const taken = new Set(teams.filter((t) => t.id !== teamId && t.docked === null).map((t) => key(t.pos)));
-    const wanted: Hex = path[path.length - 1];
-    while (path.length > 1 && taken.has(key(path[path.length - 1]))) path.pop();
-    if (key(path[path.length - 1]) !== key(wanted)) move.blockedAt = wanted;
     move.path = path;
 
     for (const h of path.slice(1)) {

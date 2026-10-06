@@ -77,10 +77,10 @@ const PHASE_TEXT: Record<string, [string, string, string]> = {
   intro: ["🗺️", "WELCOME TO SPOTLIGHT ISLES", ""],
   challenge: ["💬", "TALK IT THROUGH", "Discuss, then tap your team's answer"],
   reveal: ["✅", "THE ANSWER", "Points decide who moves first"],
-  vote: ["🧭", "WHERE TO?", "Agree on a hex with your team"],
+  vote: ["🧭", "FLY!", "Tap GO, or pick another hex"],
   resolve: ["💨", "SHIPS MOVE", "One at a time — most points first"],
   spotReady: ["🎤", "PITCH PREP", "Choose a speaker and plan your pitch"],
-  spotSpeak: ["🎤", "LIVE PITCH", "25 seconds — everyone else listens"],
+  spotSpeak: ["🎤", "LIVE PITCH", "40 seconds — everyone else listens"],
   spotRate: ["⭐", "MARK THE PITCH", "Hook · Clarity · Confidence"],
   spotReveal: ["📋", "SCORECARDS", "Stars become steps"],
 };
@@ -154,7 +154,7 @@ function ScoreRow({ team, index, progress }: { team: TeamPublic; index: number; 
         <div className="truncate font-display text-[32px] leading-none">{team.name}</div>
         <div className="mt-1.5 flex items-center gap-2 whitespace-nowrap text-[24px] font-extrabold leading-none text-white/85">
           {team.docked !== null ? (
-            <span className="text-gold">🎤 At the Stage</span>
+            <span className="text-gold">🎤 Arrived</span>
           ) : (
             <span style={{ opacity: team.hasKey ? 1 : 0.35 }} title={team.hasKey ? "Has its key" : "Still needs its key"}>
               🔑{team.hasKey ? " ✓" : ""}
@@ -309,13 +309,12 @@ export function ResultStrip({ data, bottom }: { data: PublicData; bottom: number
             </div>
             <div className="mt-1 flex items-baseline justify-between">
               <span className="text-[24px] font-extrabold text-white/80">
-                {r.speaker ? "Pitched" : r.fairJudge ? "⚖️ Fair judge" : r.rated === false ? "Didn't mark" : r.rated ? "Marked" : `${Math.round(r.accuracy * 100)}% right`}
+                {r.speaker ? "Pitched" : r.rated === false ? "Didn't mark" : r.rated ? "Marked ✓" : `${Math.round(r.accuracy * 100)}% right`}
               </span>
               <span className="font-display text-[26px] text-emerald-300">+{r.points}</span>
             </div>
             <div className="font-display text-[32px] leading-tight text-gold">
-              {docked ? "At the Stage" : `${r.steps} ${r.steps === 1 ? "step" : "steps"}`}
-              {r.tailwind && <span className="ml-2 text-[22px] text-sky-300">🌬️ tailwind</span>}
+              {docked ? "At the Stage" : `${r.steps} steps`}
             </div>
           </div>
         );
@@ -328,8 +327,8 @@ export function VotePanel({ data, progress }: { data: PublicData; progress: { do
   return (
     <Panel>
       <div className="flex items-center gap-5">
-        <span className="shrink-0 font-display text-[46px] text-gold">🧭 WHERE TO?</span>
-        <span className="text-[27px] font-bold leading-snug text-white/85">Talk with your team and tap a glowing hex. Get your 🔑 first, then head for the Stage. Ships move in score order, and you can&apos;t land on another ship.</span>
+        <span className="shrink-0 font-display text-[46px] text-gold">🧭 FLY!</span>
+        <span className="text-[27px] font-bold leading-snug text-white/85">Your phone shows the best move in green. Tap <strong>GO</strong> to take it, or pick another hex. If you don&apos;t choose, your ship flies the best route by itself.</span>
       </div>
       {!data.manualMode && <TeamPips teams={data.teams} progress={progress} label="Votes in" />}
     </Panel>
@@ -344,7 +343,6 @@ export function ResolvePanel({ data }: { data: PublicData }) {
     if (m.docked) lines.push(`🎤 ${name(m.teamId)} reaches the Stage ${ORDINAL[m.docked - 1]}! +${POINTS.dock[Math.min(m.docked, POINTS.dock.length) - 1]}`);
     if (m.gotKey) lines.push(`🔑 ${name(m.teamId)} found its key`);
     if (m.stars.length) lines.push(`⭐ ${name(m.teamId)} grabbed a star`);
-    if (m.blockedAt) lines.push(`💥 ${name(m.teamId)} was beaten to a hex`);
   }
   if (!lines.length) lines.push(moves.some((m) => m.path.length > 1) ? "Ships on the move…" : "⚓ Everyone held position");
   return (
@@ -361,9 +359,9 @@ export function ResolvePanel({ data }: { data: PublicData }) {
 /* ---------- intro: the whole game in three cards ---------- */
 
 const RULES: [string, string, string][] = [
-  ["🔑", "FIND YOUR KEY, REACH THE STAGE", "Your team's key is on the opposite island. Fly over it, then head for the Keynote Stage in the middle. Water blocks you and fog slows you down."],
-  ["💬", "TALK FIRST, THEN TAP", "Each round your team discusses a question, or pitches for 25 seconds while the others mark it. Better answers and pitches earn more steps."],
-  ["🥇", "MOST POINTS MOVES FIRST", "Ships move one at a time, highest score first, and you can't land on another ship. Last place gets a tailwind: one extra step."],
+  ["🎯", "THE GOAL: REACH THE STAGE", "Fly to your team's key on the opposite island, then to the Keynote Stage in the middle. The earlier you arrive, the bigger the bonus."],
+  ["💬", "TALK AND PITCH TO MOVE", "Every round every group moves. Discuss the question and get it right, or give a good pitch, and you move further: 3 steps instead of 2."],
+  ["🎡", "EVERY GROUP PITCHES ONCE", "A spin picks two groups each pitch round. You get a topic, 48 seconds to prepare and 40 seconds to speak. The other groups mark it."],
 ];
 
 export function Intro({ frac }: { frac: number }) {
@@ -373,7 +371,7 @@ export function Intro({ frac }: { frac: number }) {
       {step < 0 ? (
         <div className="pop mx-auto max-w-[1500px] text-center">
           <div className="title-stroke font-display text-[150px] leading-none text-gold">SPOTLIGHT ISLES</div>
-          <div className="mt-2 text-[40px] font-extrabold">A race to the Keynote Stage, powered by good presenting.</div>
+          <div className="mt-2 text-[40px] font-extrabold">Get your group to the Keynote Stage by talking and pitching well.</div>
           <div className="glossy mx-auto mt-5 grid max-w-[1400px] grid-cols-2 gap-x-8 gap-y-2 rounded-3xl px-8 py-4 text-left text-[28px] font-bold">
             {LEARNING_OBJECTIVES.map((o, i) => (
               <div key={o} className="flex gap-3">
@@ -404,7 +402,7 @@ export function Intro({ frac }: { frac: number }) {
 
 /** Small legend so the map reads at a glance. */
 export function Legend() {
-  const items: [string, string][] = [["🔑", "your key: on the opposite island"], ["🎤", "the Stage: needs your key"], ["⭐", "star: +10 points"], ["☁️", "fog: costs 2 steps"], ["🌊", "water: no way through"]];
+  const items: [string, string][] = [["🔑", "1. fly to your key (opposite island)"], ["🎤", "2. then fly to the Stage"], ["⭐", "star: +10 points"], ["🌊", "water: fly around it"]];
   return (
     <div className="glossy absolute left-6 top-[150px] rounded-2xl px-4 py-2 text-[24px] font-bold leading-snug text-white/90">
       {items.map(([icon, text]) => (

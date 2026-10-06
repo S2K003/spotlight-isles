@@ -126,8 +126,8 @@ function Host({ ctl, lowFx }: { ctl: HostController; lowFx: boolean }) {
         a.play("whoosh");
         break;
       case "spotReady":
+        // No big banner here: it would cover the spin.
         a.play("banner");
-        showSlam(`ROUND ${view.phase?.round}`, "🎤 Pitch round", "#fff1b8");
         break;
       case "spotSpeak":
         a.play("pop");
@@ -150,7 +150,6 @@ function Host({ ctl, lowFx }: { ctl: HostController; lowFx: boolean }) {
       const a = audio.current;
       if (e === "step") a?.play("step");
       else if (e === "turn") a?.play("pop");
-      else if (e === "blocked") a?.play("clash");
       else if (e === "key") a?.play("chest");
       else if (e === "star") a?.play("card");
       else if (e === "firework") a?.play("firework");
@@ -184,7 +183,7 @@ function Host({ ctl, lowFx }: { ctl: HostController; lowFx: boolean }) {
             }}
           />
         ) : (
-          <GameHud ctl={ctl} view={view} kind={kind} />
+          <GameHud ctl={ctl} view={view} kind={kind} onSpinTick={() => audio.current?.play("reel")} />
         )}
         <Slam key={slam?.id ?? 0} msg={slam} />
         {started && hiddenWarn && (
@@ -205,7 +204,7 @@ function Host({ ctl, lowFx }: { ctl: HostController; lowFx: boolean }) {
   );
 }
 
-function GameHud({ ctl, view, kind }: { ctl: HostController; view: HostView; kind: string }) {
+function GameHud({ ctl, view, kind, onSpinTick }: { ctl: HostController; view: HostView; kind: string; onSpinTick: () => void }) {
   const { frac, phaseMs } = useClock(ctl);
   const data = view.publicData;
   const speed = view.state.speed || 1;
@@ -226,7 +225,7 @@ function GameHud({ ctl, view, kind }: { ctl: HostController; view: HostView; kin
       {kind === "vote" && <VotePanel data={data} progress={progress} />}
       {(kind === "vote" || kind === "resolve") && !data.manualMode && <Legend />}
       {kind === "resolve" && <ResolvePanel data={data} />}
-      {kind.startsWith("spot") && <SpotlightStage view={view} data={data} seconds={seconds} progress={progress} />}
+      {kind.startsWith("spot") && <SpotlightStage view={view} data={data} frac={frac} seconds={seconds} progress={progress} onSpinTick={onSpinTick} />}
       {kind === "spotReveal" && <ResultStrip data={data} bottom={330} />}
 
       {kind === "results" && data.results && <Results data={data} results={data.results} frac={frac} />}

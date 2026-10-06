@@ -1,25 +1,22 @@
-import { AUDIENCE_STEPS, MANUAL_BAND_ACCURACY, MANUAL_DEFAULT_BAND, MAX_STEPS, MIN_STEPS, PITCH_BANDS, POINTS, STEP_BANDS, TAILWIND_STEPS } from "@/config/balance";
+import { GOOD_STEPS, GREAT_STEPS, MIN_STEPS, PITCH_GOOD, PITCH_GREAT, POINTS, QUESTION_PASS } from "@/config/balance";
 import type { Team, TeamId, TeamRoundResult } from "./types";
 
-/** Team accuracy (0..1) on a question → steps. Even a wrong answer moves 1: nobody is left behind. */
+/** Question: if at least half the team chose the best answer, 3 steps; otherwise 2. Nobody is ever stuck. */
 export function stepsFromAccuracy(accuracy: number): number {
-  for (const band of STEP_BANDS) if (accuracy >= band.min) return band.steps;
-  return MIN_STEPS;
+  return accuracy >= QUESTION_PASS ? GOOD_STEPS : MIN_STEPS;
 }
 
-/** Points for a question: 10 per step earned, but nothing for getting it completely wrong. */
-export function pointsFromAccuracy(accuracy: number): number {
-  return accuracy > 0 ? stepsFromAccuracy(accuracy) * POINTS.perStep : 0;
-}
-
-/** Pitch star average (1–5) → steps for the speaking team. Speaking always earns at least 1. */
+/** Pitch star average (1–5) → steps for the pitching team: great 4, good 3, otherwise 2. */
 export function stepsFromPitch(overall: number): number {
-  for (const band of PITCH_BANDS) if (overall >= band.min) return band.steps;
-  return MIN_STEPS;
+  return overall >= PITCH_GREAT ? GREAT_STEPS : overall >= PITCH_GOOD ? GOOD_STEPS : MIN_STEPS;
 }
 
-export function audienceSteps(rated: boolean, fair: boolean): number {
-  return fair ? AUDIENCE_STEPS.fair : rated ? AUDIENCE_STEPS.rated : AUDIENCE_STEPS.none;
+/**
+ * In a pitch round the audience groups move the standard distance, and earn bonus points for
+ * marking the pitches. (If marking also gave extra steps, every group would arrive together.)
+ */
+export function audienceResult(rated: boolean): { steps: number; points: number } {
+  return { steps: MIN_STEPS, points: MIN_STEPS * POINTS.perStep + (rated ? POINTS.mark : 0) };
 }
 
 export interface TeamAnswers {
@@ -36,40 +33,23 @@ export interface TeamAnswers {
 export function scoreQuestion(inputs: TeamAnswers[]): TeamRoundResult[] {
   return inputs.map((inp) => {
     const accuracy = inp.members > 0 ? Math.min(1, inp.correct / inp.members) : 0;
-    return {
-      teamId: inp.teamId,
-      members: inp.members,
-      correct: inp.correct,
-      accuracy,
-      steps: stepsFromAccuracy(accuracy),
-      points: pointsFromAccuracy(accuracy),
-      tailwind: false,
-    };
+    const steps = stepsFromAccuracy(accuracy);
+    return { teamId: inp.teamId, members: inp.members, correct: inp.correct, accuracy, steps, points: steps * POINTS.perStep };
   });
 }
 
-/** Manual Mode: the facilitator clicks an accuracy band per team after a show of hands. */
-export function scoreManual(bands: (number | null)[]): TeamRoundResult[] {
-  return bands.map((b, i) => {
-    const accuracy = MANUAL_BAND_ACCURACY[b ?? MANUAL_DEFAULT_BAND];
-    return { teamId: i as TeamId, members: 0, correct: 0, accuracy, steps: stepsFromAccuracy(accuracy), points: pointsFromAccuracy(accuracy), tailwind: false };
+/** Manual Mode: after a show of hands the facilitator clicks whether each team got it. Unset counts as yes. */
+export function scoreManual(pass: (boolean | null)[]): TeamRoundResult[] {
+  return pass.map((p, i) => {
+    const ok = p ?? true;
+    const steps = ok ? GOOD_STEPS : MIN_STEPS;
+    return { teamId: i as TeamId, members: 0, correct: 0, accuracy: ok ? 1 : 0, steps, points: steps * POINTS.perStep };
   });
 }
 
-/**
- * After a round's points are known: docked ships don't move, and the team (or tied teams) in last
- * place among those still flying gets a tailwind of +1 step, unless everyone is level.
- * `scores` are the totals AFTER this round's points.
- */
-export function applyTailwind(results: TeamRoundResult[], teams: Pick<Team, "id" | "docked">[], scores: number[]): TeamRoundResult[] {
-  const flying = teams.filter((t) => t.docked === null).map((t) => t.id);
-  const low = Math.min(...flying.map((id) => scores[id]));
-  const high = Math.max(...teams.map((t) => scores[t.id]));
-  return results.map((r) => {
-    if (teams[r.teamId].docked !== null) return { ...r, steps: 0, tailwind: false };
-    const tailwind = flying.length > 0 && scores[r.teamId] === low && low < high;
-    return { ...r, tailwind, steps: Math.min(MAX_STEPS, r.steps + (tailwind ? TAILWIND_STEPS : 0)) };
-  });
+/** Ships already at the Stage don't move. */
+export function groundDocked(results: TeamRoundResult[], teams: Pick<Team, "id" | "docked">[]): TeamRoundResult[] {
+  return results.map((r) => (teams[r.teamId].docked !== null ? { ...r, steps: 0 } : r));
 }
 
 /**

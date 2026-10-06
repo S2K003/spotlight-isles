@@ -15,11 +15,11 @@ export function buildTimeline(): Phase[] {
   ROUNDS.forEach((def, i) => {
     const round = i + 1;
     const p = `r${round}`;
-    if (def.kind === "question") {
+    if (def === "question") {
       push(`${p}-challenge`, "challenge", DUR.challenge, round);
       push(`${p}-reveal`, "reveal", DUR.reveal, round);
     } else {
-      push(`${p}-ready`, "spotReady", DUR.spotReady, round, { teams: def.teams });
+      push(`${p}-ready`, "spotReady", DUR.spotReady, round);
       push(`${p}-speakA`, "spotSpeak", DUR.spotSpeak, round, { slot: 0 });
       push(`${p}-rateA`, "spotRate", DUR.spotRate, round, { slot: 0 });
       push(`${p}-speakB`, "spotSpeak", DUR.spotSpeak, round, { slot: 1 });
