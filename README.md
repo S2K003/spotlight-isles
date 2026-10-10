@@ -17,6 +17,7 @@ The route is 11–12 steps on every map and everyone moves at least 2 a round, s
 - `/` — landing page: join with a 4-letter code, or host
 - `/host` — projector screen (lobby → game → results → debrief). Runs the game engine.
 - `/play/CODE` — phone controller
+- `/student` — printable one-page student guide (also saved as [Spotlight-Isles-Student-Guide.pdf](public/Spotlight-Isles-Student-Guide.pdf))
 - `/guide` — printable facilitator guide, question bank and QR poster
 - `/dev/bots?count=40&code=CODE` — bot simulator for rehearsals
 
@@ -100,6 +101,8 @@ npm run dev                  # http://localhost:3000
 - `/host?fresh=1` discards a saved game and opens a new room.
 
 Print `/guide?code=CODE` (Print → Save as PDF, A4, margins none, background graphics on) for the facilitator guide, run sheet, question bank and QR poster.
+
+For students, print `/student` the same way, or hand out the ready-made PDF at `/Spotlight-Isles-Student-Guide.pdf`. Opening `/student?code=CODE` (the lobby's "Student guide" link does this) adds a QR code for that room. If you change the rules, timings or topics, the `/student` page updates by itself, but the saved PDF does not: open `/student`, choose Print → Save as PDF, and replace the file in `public/`.
 
 ## Customising
 

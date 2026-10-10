@@ -154,6 +154,9 @@ export function Lobby({ ctl, view, volume, onVolume, onStart }: Props) {
           <button className="underline" onClick={() => ctl.newRoom()}>
             New room code
           </button>
+          <a className="underline" href={`/student?code=${state.roomCode}`} target="_blank" rel="noreferrer">
+            Student guide
+          </a>
           <a className="underline" href="/guide" target="_blank" rel="noreferrer">
             Facilitator guide
           </a>

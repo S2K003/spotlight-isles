@@ -243,6 +243,19 @@ async function staticPages(browser) {
   note(fit.every((p) => p <= 100), `each guide sheet fits one A4 page (content is ${fit.join("%, ")}% of the page height)`);
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "guide-print.png"), fullPage: true }).catch(() => {});
   await page.emulateMedia({ media: "screen" });
+
+  // Student guide: one A4 page, with and without a room code. Also saved as a PDF when asked.
+  for (const q of ["", "?code=ABCD"]) {
+    await page.goto(`${BASE}/student${q}`);
+    if (q) await page.waitForSelector("img[alt^='QR code']");
+    else await page.waitForSelector(".sheet");
+    await page.emulateMedia({ media: "print" });
+    const s = await page.evaluate(() => Array.from(document.querySelectorAll(".sheet"), (e) => Math.round((e.scrollHeight / e.clientHeight) * 100)));
+    note(s.length === 1 && s[0] <= 100, `student guide ${q ? "with a QR code" : "without a code"} fits one A4 page (${s.join("%, ")}%)`);
+    if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `student${q ? "-qr" : ""}.png`), fullPage: true }).catch(() => {});
+    if (!q && process.env.SMOKE_STUDENT_PDF) await page.pdf({ path: process.env.SMOKE_STUDENT_PDF, format: "A4", printBackground: true });
+    await page.emulateMedia({ media: "screen" });
+  }
   note(errors.length === 0, `console clean (${errors.length} errors)`);
   for (const e of errors.slice(0, 8)) console.log("      " + e);
   await ctx.close();

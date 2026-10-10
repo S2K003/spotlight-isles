@@ -62,6 +62,9 @@ export default function Landing() {
           Host a game (projector)
         </Link>
         <div className="mt-3 flex gap-4 text-sm font-bold text-white/70">
+          <Link href="/student" className="underline">
+            Student guide
+          </Link>
           <Link href="/guide" className="underline">
             Facilitator guide
           </Link>

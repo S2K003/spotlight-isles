@@ -43,6 +43,9 @@ export default function GuidePage() {
     <div className="guide min-h-dvh bg-[#d8dbe8] py-4">
       <div className="no-print mx-auto mb-4 flex max-w-[210mm] flex-wrap items-center gap-3 rounded-xl bg-white p-3 text-sm text-[#151a2e] shadow">
         <strong>Facilitator Guide</strong>
+        <a href="/student" className="underline">
+          Student guide
+        </a>
         <label className="flex items-center gap-1">
           Room code for the poster:
           <input value={code} onChange={(e) => setCode(normalizeRoomCode(e.target.value))} maxLength={4} placeholder="none" className="w-20 rounded border border-gray-400 px-2 py-0.5 font-bold uppercase tracking-widest" />
