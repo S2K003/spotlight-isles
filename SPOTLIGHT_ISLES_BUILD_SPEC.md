@@ -3,7 +3,7 @@
 **For:** GSOE9010 Week 5 – Presentation Skills (FC4) workshop · **Host:** Vercel · **Players:** ~6–50 on their phones + 1 projector screen
 
 ---
-
+   
 ## 0. Instructions for Claude Code (read first)
 
 You are building a complete, production-quality web game from this spec. Work through the **milestones in Section 14 in order** and do not skip the acceptance checks.
