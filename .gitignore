@@ -7,3 +7,6 @@ out
 next-env.d.ts
 *.tsbuildinfo
 test-results
+
+# rendered clips and preview video for the intro deck (about 90 MB; the clips are already inside the .pptx)
+Spotlight-Isles-Cinematic-assets/
