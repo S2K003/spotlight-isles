@@ -256,6 +256,38 @@ async function staticPages(browser) {
     if (!q && process.env.SMOKE_STUDENT_PDF) await page.pdf({ path: process.env.SMOKE_STUDENT_PDF, format: "A4", printBackground: true });
     await page.emulateMedia({ media: "screen" });
   }
+  // Workshop plan: six sheets, each one page while the boxes still hold their placeholders.
+  await page.goto(`${BASE}/plan`);
+  await page.waitForSelector(".sheet");
+  await page.emulateMedia({ media: "print" });
+  const plan = await page.evaluate(() => Array.from(document.querySelectorAll(".sheet"), (e) => Math.round((e.scrollHeight / (296 * 3.7795)) * 100)));
+  note(plan.length === 6 && plan.every((p) => p <= 100), `workshop plan has 6 sheets that each fit a page (${plan.join("%, ")}%)`);
+  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "plan.png"), fullPage: true }).catch(() => {});
+  await page.emulateMedia({ media: "screen" });
+
+  // Typing into a box is saved and shows up on the slides too.
+  await page.locator("[aria-label='Editable: f1']").first().evaluate((el) => { el.focus(); el.innerText = "Alex Example"; el.blur(); });
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto(`${BASE}/slides`);
+  await page.waitForSelector("text=Presentation");
+  note((await page.locator(".no-print >> text=Alex Example").count()) > 0, "a name typed on the plan appears on the title slide");
+  const total = Number((await page.locator("text=/1 \\/ \\d+/").first().innerText()).split("/")[1]);
+  for (let n = 0; n < total; n++) {
+    if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `slide-${n + 1}.png`) }).catch(() => {});
+    await page.keyboard.press("ArrowRight");
+  }
+  note(total >= 7 && (await page.locator("text=Thank you").count()) > 0, `slide deck has ${total} slides and the arrow keys reach the last one`);
+
+  // The upload pack: one document with everything.
+  await page.setViewportSize({ width: 1000, height: 1300 });
+  await page.goto(`${BASE}/pack`);
+  await page.waitForSelector("text=What is in this document");
+  const sheets = await page.locator(".sheet").count();
+  note(sheets === 1 + 6 + Math.ceil(total / 2) + 4 + 1, `upload pack has ${sheets} sheets: cover, plan, slides, facilitator guide, student handout`);
+  await sleep(800); // let fonts and the QR settle before printing
+  if (process.env.SMOKE_PACK_PDF) await page.pdf({ path: process.env.SMOKE_PACK_PDF, format: "A4", printBackground: true });
+  await page.evaluate(() => localStorage.removeItem("spotlight-isles:workshop"));
+
   note(errors.length === 0, `console clean (${errors.length} errors)`);
   for (const e of errors.slice(0, 8)) console.log("      " + e);
   await ctx.close();

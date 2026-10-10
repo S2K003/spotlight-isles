@@ -92,13 +92,13 @@ export const RUBRIC: Record<CriterionKey, RubricEntry> = {
 export const SPOTLIGHT_CRITERIA = [
   { key: "hook", label: "Hook", maps: "Engagement", hint: "Did the opening grab you?" },
   { key: "clarity", label: "Clarity", maps: "Structure", hint: "Was the message easy to follow?" },
-  { key: "confidence", label: "Confidence", maps: "Delivery", hint: "Voice, pace and presence" },
+  { key: "confidence", label: "Confidence", maps: "Delivery", hint: "Voice, pace and eye contact" },
 ] as const;
 
 export const OBJECTIVES_SHORT = ["Recognise strong presentations", "Pitch as a team", "Mark fairly with a rubric", "Decide together"];
 
 export const LEARNING_OBJECTIVES = [
-  "Recognise what makes a research presentation strong: structure, visuals, delivery and handling questions.",
+  "Recognise what makes a presentation strong: structure, slides, delivery and handling questions.",
   "Practise a short oral pitch as a team, with a hook, clarity and confidence.",
   "Practise assessing presentations against a rubric, fairly and consistently.",
   "Make team decisions through discussion and clear communication.",

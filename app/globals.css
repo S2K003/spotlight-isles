@@ -185,3 +185,58 @@ button:disabled {
   .guide .sheet:last-child { page-break-after: auto; break-after: auto; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ---------- editable text on the plan and the slides ---------- */
+.field {
+  border-radius: 3px;
+  cursor: text;
+  min-width: 2em;
+}
+.field:hover,
+.field:focus {
+  box-shadow: 0 0 0 2px #7c3aed55;
+}
+.field-todo {
+  background: #fff3b0;
+  color: #5b4a00;
+}
+@media print {
+  .field,
+  .field:hover,
+  .field:focus {
+    box-shadow: none;
+  }
+  .field-todo {
+    background: transparent;
+    color: inherit;
+  }
+  /* Plan sheets hold typed text, so they may grow past one page instead of being clipped. */
+  .guide .sheet.flow {
+    height: auto;
+    min-height: 296mm;
+    overflow: visible;
+  }
+  /* The upload pack joins several documents: every sheet starts a new page. */
+  .pack .sheet {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+  .pack > div:last-child .sheet:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+  .slide-page {
+    width: 297mm;
+    height: 209.5mm;
+    display: grid;
+    place-items: center;
+    background: #0b1026;
+    overflow: hidden;
+    break-after: page;
+    page-break-after: always;
+  }
+  .slide-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}

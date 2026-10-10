@@ -61,7 +61,13 @@ export default function Landing() {
         <Link href="/host" className="btn mt-4 flex w-full items-center justify-center bg-white/15 text-lg text-white">
           Host a game (projector)
         </Link>
-        <div className="mt-3 flex gap-4 text-sm font-bold text-white/70">
+        <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm font-bold text-white/70">
+          <Link href="/pack" className="underline">
+            Workshop pack
+          </Link>
+          <Link href="/slides" className="underline">
+            Slides
+          </Link>
           <Link href="/student" className="underline">
             Student guide
           </Link>

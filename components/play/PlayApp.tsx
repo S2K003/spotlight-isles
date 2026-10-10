@@ -425,7 +425,7 @@ function PhaseBody({ client, view, data, teamId, reduce }: { client: GameClient;
         return (
           <div className="flex flex-1 flex-col justify-center text-center">
             <p className="text-5xl">👂</p>
-            <p className="mt-2 font-display text-3xl">Listen to {speakerTeam.name}</p>
+            <p className="mt-2 font-display text-3xl">Phones down, eyes up: listen to {speakerTeam.name}</p>
             <p className="mt-2 text-base font-bold text-white/75">&ldquo;{spot.topics[spot.slot]}&rdquo;</p>
             <p className="mt-5 text-sm font-extrabold text-white/65">You&apos;ll mark Hook, Clarity and Confidence in a moment.</p>
           </div>

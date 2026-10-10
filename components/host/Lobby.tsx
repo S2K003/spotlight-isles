@@ -157,8 +157,8 @@ export function Lobby({ ctl, view, volume, onVolume, onStart }: Props) {
           <a className="underline" href={`/student?code=${state.roomCode}`} target="_blank" rel="noreferrer">
             Student guide
           </a>
-          <a className="underline" href="/guide" target="_blank" rel="noreferrer">
-            Facilitator guide
+          <a className="underline" href="/pack" target="_blank" rel="noreferrer">
+            Workshop pack
           </a>
           <a className="underline" href={`/dev/bots?code=${state.roomCode}&count=30`} target="_blank" rel="noreferrer">
             Add bots

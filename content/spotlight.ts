@@ -1,17 +1,18 @@
 /**
- * Team pitch topics (25 seconds, one speaker chosen by the team). There are six, so every team
- * gets a different one. They all ask for the same skill: explain research clearly to a non-expert.
+ * Group pitch topics (40 seconds, one speaker chosen by the group). All six are about
+ * PRESENTATION SKILLS, so the pitch itself is a chance to show the skill it describes.
+ * There are six, so every group gets a different one.
  */
 export const SPOTLIGHT_TOPICS: string[] = [
-  "Pitch your research project idea to someone who has never studied engineering",
-  "Explain why your research problem matters, in plain words",
-  "Convince us your project deserves funding",
-  "Explain your research method to a 10-year-old",
-  "What don't we know yet that your project will find out?",
-  "Pitch one thing from GSOE9010 that every engineer should know",
+  "Teach us your best tip for calming nerves before you present",
+  "Convince us that a slide should show one idea, not ten",
+  "Show us a boring opening, then turn it into a great one",
+  "Explain why eye contact matters, while doing it",
+  "Convince us to rehearse out loud with a timer",
+  "Tell us how to handle a question you can't answer",
 ];
 
-/** The simple recipe shown to the pitching team while they prepare. */
+/** The simple recipe shown to the pitching group while they prepare. */
 export const PITCH_RECIPE: [string, string][] = [
   ["Hook", "Start with something that makes us care"],
   ["Clarity", "One clear message, no jargon"],
@@ -20,11 +21,11 @@ export const PITCH_RECIPE: [string, string][] = [
 
 export const TIPS: string[] = [
   "Tip: pause instead of saying \"um\".",
-  "Tip: open with the problem, not with your name.",
+  "Tip: open with a question or a problem, not with your name.",
   "Tip: one idea per slide.",
   "Tip: rehearse out loud with a timer.",
   "Tip: if you're running out of time, jump to your conclusion.",
   "Tip: don't know the answer? Say so, and say how you'd find out.",
-  "Tip: cite your sources on the slide, not just in the report.",
-  "Tip: talk it through with your team before you tap.",
+  "Tip: share your eye contact around the whole room.",
+  "Tip: talk it through with your group before you tap.",
 ];

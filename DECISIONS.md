@@ -40,9 +40,15 @@ So a group that taps GO each round (or does nothing at all) is at the Stage by r
 - **Pitches are a group effort:** the group chooses its own speaker. Self-marking is blocked. With five or more groups marking, the highest and lowest averages are dropped. An unrated pitch counts as 3★.
 - **The coloured trail** a ship leaves is decoration only.
 
-## Course content
+## Course content and the assessment task
 
-I do not have the GSOE9010 course outline. The questions and pitch topics assume it is a research-skills course for engineering coursework students and that this workshop is about oral presentations. **Check `content/questions.ts` and `content/spotlight.ts` against the actual course material before the session.**
+- **Topic: presentation skills.** The ten discussion questions and the six pitch topics are all about presenting (structure, slides, voice and pace, eye contact, notes, timing, teamwork, engaging the audience, handling questions). The pitch topics are about presenting too, so each pitch demonstrates the skill it describes. They were written without access to the Week 5 lecture material, so **check `content/questions.ts` and `content/spotlight.ts` against it.**
+- **The game is the third, original activity.** The assessment task asks for a 55–60 minute session with three activities of about a third each, plus an introduction and conclusion. The plan is 58 minutes: 4 + 16 + 16 + 16 + 6. The game keeps its exact 15:00; the sixteenth minute is for checking every group has joined.
+- **The two suggested activities are placeholders.** Their instructions are only on Moodle, so `/plan` and `/slides` have editable boxes for them with prompts, and suggested modifications clearly marked as suggestions. Nothing about them is invented.
+- **Research evidence is a scaffold, not a claim.** `/plan` page 6 maps each principle to where it appears in the game and leaves the source column and the "what we studied" and "our rehearsal" boxes for the group to fill in. No references are supplied, because the evidence has to be of the group's own reading.
+- **Teamwork is designed in.** The rubric's top band needs every facilitator in every activity and a shared introduction and conclusion, so the plan has a role table for every part of the hour, and the game host changes every two rounds.
+- **Typed text lives in the browser** (localStorage), shared between the plan, slides and pack. That keeps the site free of any database; the cost is that it has to be filled in and printed on the same computer.
+- **Phones and the engagement criterion.** The rubric's top band says "no looking at phones". Phones are this activity's controller, so the phone screens say "phones down, eyes up" during pitches, the plan says so explicitly, and Manual Mode runs the game with no phones.
 
 ## Networking
 

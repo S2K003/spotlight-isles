@@ -17,11 +17,33 @@ The route is 11–12 steps on every map and everyone moves at least 2 a round, s
 - `/` — landing page: join with a 4-letter code, or host
 - `/host` — projector screen (lobby → game → results → debrief). Runs the game engine.
 - `/play/CODE` — phone controller
+- `/pack` — **everything for the Moodle upload as one PDF**: cover, workshop plan, slides, facilitator guide, question bank, student handout
+- `/plan` — the workshop plan for the whole hour (type your names and the two suggested activities straight onto the page)
+- `/slides` — the slide deck for the hour (arrow keys to move, F for full screen)
 - `/student` — printable one-page student guide (also saved as [Spotlight-Isles-Student-Guide.pdf](public/Spotlight-Isles-Student-Guide.pdf))
 - `/guide` — printable facilitator guide, question bank and QR poster
 - `/dev/bots?count=40&code=CODE` — bot simulator for rehearsals
 
 [DECISIONS.md](DECISIONS.md) explains the design choices. [SPOTLIGHT_ISLES_BUILD_SPEC.md](SPOTLIGHT_ISLES_BUILD_SPEC.md) is the original, more complex design (version 1); the game was simplified after review, so where they differ, this README and DECISIONS.md are correct.
+
+## The assessment (GSOE9010 workshop facilitation)
+
+The game is the group's **third, original activity**. The task also asks for a 55–60 minute session with two suggested activities, and for uploaded materials worth 30% of the mark. The project covers those like this:
+
+| The task asks for | Where it is |
+|---|---|
+| A workshop plan for the hour, with three balanced activities, an introduction and a conclusion | `/plan` page 1: 58 minutes (4 + 16 + 16 + 16 + 6) |
+| Each activity with an introduction, a learning outcome, an interactive part and a summary | `/plan` pages 2–4 |
+| Evidence of the two suggested activities and your modifications | `/plan` pages 2–3. **You must type these in**: they come from your Moodle instructions |
+| A third original activity with innovative facilitation strategies | `/plan` page 4, the facilitator guide, the game itself |
+| Evidence of research | `/plan` page 6. **You must type in what you watched and read**, and the source for each principle |
+| Slides | `/slides` |
+| Teamwork: every facilitator in every activity | The role table on `/plan` page 1 (editable); the game host changes every two rounds |
+| One combined PDF, uploaded by 10am on the day | `/pack` → Print → Save as PDF |
+
+Text you type on `/plan` or `/slides` is saved **in that browser only** and shared between the plan, the slides and the pack. Fill it in and print from the same computer and browser. Boxes still showing `[square brackets]` are highlighted, and the toolbar counts how many are left.
+
+Two things to settle with your tutor beforehand: the rubric's top band for audience engagement says "no looking at phones", and this activity uses phones as its controller, so tell the tutor that phone use is part of the activity (Manual Mode runs it with no phones if needed). And check the course's rules on AI-assisted work before you submit.
 
 ## Deploy to Vercel (about 10 minutes)
 
